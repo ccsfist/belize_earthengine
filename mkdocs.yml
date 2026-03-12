@@ -1,0 +1,36 @@
+site_name: Belize MHEWS Google Earth Engine Guide
+theme:
+  name: material
+  logo: ""
+
+  features:
+    #- navigation.tabs # uncomment this to make navigation on top
+    - navigation.sections
+    - toc.integrate
+    #- navigation.footer
+
+nav:
+- 'intro.md'
+- 'workflow.md' 
+- 'shapes.md'
+- 'metrics.md'
+- 'forecast.md'
+- 'export.md'
+- 'functionguide.md'
+
+plugins:
+  - search
+  - macros
+
+extra:
+  kobo_form_id: iusvpk4H
+  analytics:
+    provider: google
+    property: G-YM4PVFJE0F
+
+extra_javascript:
+  - javascripts/slide_manager.js
+  - javascripts/kobo_loader.js # should no longer be necessary now that there is slide-manager.js
+
+extra_css:
+  - stylesheets/styles.css
