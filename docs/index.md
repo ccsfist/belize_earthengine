@@ -10,5 +10,5 @@ In the this part, we will show you the technical details of how to customize tho
 
 https://code.earthengine.google.com/register
 
-<div id="slide-config" data-type="simple" data-next="../workflow/" data-kobo-id="hACTMCaZ" data-width="100%"> </div>
+<div id="slide-config" data-type="start" data-next="../workflow/"> </div>
 

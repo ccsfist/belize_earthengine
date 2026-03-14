@@ -10,7 +10,7 @@ theme:
     #- navigation.footer
 
 nav:
-- 'intro.md'
+- 'index.md'
 - 'workflow.md' 
 - 'shapes.md'
 - 'metrics.md'
