@@ -1,0 +1,120 @@
+
+// multiply climate hazard dataset by exposure / vulnerability dataset 
+
+var computeExposure = function(processed_dataset,exposure_dataset,exposure_var) {
+  
+  // processed_dataset: output of function from 1_HazardMetrics - typically, annual metric
+  // exposure_dataset: exposure dataset on cloud project or GEE Data Catalog
+  // exposure_var: string; name of numeric variable denoting level of exposure in exposure_dataset
+  
+  var exposure =  exposure_dataset
+    .select(exposure_var) ;
+  
+  return processed_dataset.map(function(img) {
+    return img.multiply(exposure).copyProperties(img, img.propertyNames()) ;
+  }) ;
+} ;
+
+// calculate anomaly, mean, variance, and trend over climate hazard dataset
+
+var longtermStats = function(processed_dataset,outcome_var) {
+  
+    // processed_dataset: output of function from 1_HazardMetrics (optionally, scaled by computeExposure first)
+    // outcome_var: variable over which to calculate trend
+  
+    var dataset = processed_dataset 
+    .map(function(img){ // add time variables for trend anlaysis 
+       var imgYear = ee.Number.parse(img.get('year')) ; 
+       var imgDate = ee.Date.fromYMD(imgYear, 1, 1).millis() ; 
+       return img.addBands(ee.Image(imgDate).rename('t')).float()
+       .addBands(ee.Image.constant(1)) ;
+     });
+    
+    var mean = dataset.select(outcome_var).reduce(ee.Reducer.mean()) ;
+    var sd = dataset.select(outcome_var).reduce(ee.Reducer.stdDev()); 
+    var p25 = dataset.select(outcome_var).reduce(ee.Reducer.percentile([25])); 
+    var p75 = dataset.select(outcome_var).reduce(ee.Reducer.percentile([75])); 
+    
+    // List of the independent variable names.
+    var independents = ee.List(['constant', 't']);
+    
+    // Name of the dependent variable.
+    var dependent = ee.String(outcome_var);
+    
+    // Compute a linear trend. This will have two bands: 'residuals' and
+    // a 2x1 band called 'coefficients' (columns are for dependent variables).
+    var trend = dataset.select(independents.add(dependent))
+      .reduce(ee.Reducer.linearRegression(independents.length(), 1)); // just a linear trend for now
+
+    // Flatten the coefficients into a 2-band image.
+    var coefficients = trend.select('coefficients')
+      .arrayProject([0])
+      .arrayFlatten([independents]);
+      
+    var datasetStats = dataset.map(function(img) {
+      
+      var anomaly = img.select(outcome_var).subtract(mean).divide(sd) ;
+
+      var linearTrend = img.select(independents).multiply(coefficients).reduce('sum') ;
+
+      var stats = ee.Image([mean,sd,p25,p75,anomaly,linearTrend]) ;
+
+      return img.addBands(stats).rename(['obs','t','constant','mean','sd','p25','p75','anomaly','trend']) ;
+      
+    }) ;
+  
+  return datasetStats ; 
+  
+} ;
+
+
+// compute risk index: weighted average of normalized hazard, exposure, vulnerability
+
+var riskIndex = function(image,h_var,e_var,v_var,h_weight,e_weight,v_weight) {
+    
+    // image: compiled image w bands for hazard, exposure, vulnerability (see template for how to create) 
+    // h_var: string; name of hazard variable in collection
+    // e_var: string; name of exposure variable in collection
+    // v_var: string; name of vulnerability variable in collection
+    // h_weight: decimal; weight of hazard in risk index (weights must sum to 1)
+    // e_weight: decimal; weight of hazard in risk index (weights must sum to 1)
+    // v_weight: decimal; weight of hazard in risk index (weights must sum to 1)
+    
+    var stats = image.reduceRegion({
+    reducer: ee.Reducer.minMax(),
+    geometry: image.geometry(),
+    scale: 10000,
+    maxPixels: 1e9
+    });
+
+    var h_norm = image.select(h_var)
+                     .unitScale(stats.get(ee.String(h_var).cat('_min')),
+                                           stats.get(ee.String(h_var).cat('_max')));    
+                                           
+    var e_norm = image.select(e_var)
+                     .unitScale(stats.get(ee.String(e_var).cat('_min')),
+                                           stats.get(ee.String(e_var).cat('_max')));    
+    
+    var v_norm = image.select(v_var)
+                     .unitScale(stats.get(ee.String(v_var).cat('_min')),
+                                           stats.get(ee.String(v_var).cat('_max')));    
+    
+    var index = ee.Image(h_norm.multiply(h_weight)
+                    .add(e_norm.multiply(e_weight))
+                    .add(v_norm.multiply(v_weight))).rename('risk_index') ;
+    
+    var indexStats = index.reduceRegion({
+      reducer: ee.Reducer.minMax(),
+      geometry: image.geometry(),
+      scale: 10000,
+      maxPixels: 1e9
+      });
+      
+    return index.select('risk_index')
+                   .unitScale(indexStats.get('risk_index_min'),
+                                          indexStats.get('risk_index_max'));    
+} ;
+
+exports.computeExposure = computeExposure ; 
+exports.longtermStats = longtermStats ; 
+exports.riskIndex = riskIndex ; 

@@ -1,0 +1,131 @@
+"district","hazard_name","year","rank_avg","rank_bysector"
+"Belize","Extreme Heat",2000,26,5
+"Belize","Extreme Heat",2001,26,5
+"Belize","Extreme Heat",2002,26,5
+"Belize","Extreme Heat",2003,26,5
+"Belize","Extreme Heat",2004,26,5
+"Belize","Extreme Heat",2005,26,5
+"Belize","Extreme Heat",2006,26,5
+"Belize","Extreme Heat",2007,26,5
+"Belize","Extreme Heat",2008,26,5
+"Belize","Extreme Heat",2009,26,5
+"Belize","Extreme Heat",2010,26,5
+"Belize","Extreme Heat",2011,26,5
+"Belize","Extreme Heat",2012,26,5
+"Belize","Extreme Heat",2013,26,5
+"Belize","Extreme Heat",2014,26,5
+"Belize","Extreme Heat",2015,26,5
+"Belize","Extreme Heat",2016,26,5
+"Belize","Extreme Heat",2017,26,5
+"Belize","Extreme Heat",2018,26,5
+"Belize","Extreme Heat",2019,3,3
+"Belize","Extreme Heat",2020,4,4
+"Belize","Extreme Heat",2021,26,5
+"Belize","Extreme Heat",2022,26,5
+"Belize","Extreme Heat",2023,1,1
+"Belize","Extreme Heat",2024,2,2
+"Belize","Extreme Heat",2025,26,5
+"Cayo","Drought",2000,26,4
+"Cayo","Drought",2001,26,4
+"Cayo","Drought",2002,26,4
+"Cayo","Drought",2003,26,4
+"Cayo","Drought",2004,26,4
+"Cayo","Drought",2005,26,4
+"Cayo","Drought",2006,26,4
+"Cayo","Drought",2007,26,4
+"Cayo","Drought",2008,26,4
+"Cayo","Drought",2009,26,4
+"Cayo","Drought",2010,26,4
+"Cayo","Drought",2011,26,4
+"Cayo","Drought",2012,1,1
+"Cayo","Drought",2013,26,4
+"Cayo","Drought",2014,26,4
+"Cayo","Drought",2015,26,4
+"Cayo","Drought",2016,26,4
+"Cayo","Drought",2017,26,4
+"Cayo","Drought",2018,26,4
+"Cayo","Drought",2019,3,3
+"Cayo","Drought",2020,26,4
+"Cayo","Drought",2021,26,4
+"Cayo","Drought",2022,26,4
+"Cayo","Drought",2023,26,4
+"Cayo","Drought",2024,2,2
+"Cayo","Drought",2025,26,4
+"Corozal","Drought",2000,26,2
+"Corozal","Drought",2001,26,2
+"Corozal","Drought",2002,26,2
+"Corozal","Drought",2003,26,2
+"Corozal","Drought",2004,26,2
+"Corozal","Drought",2005,26,2
+"Corozal","Drought",2006,26,2
+"Corozal","Drought",2007,26,2
+"Corozal","Drought",2008,26,2
+"Corozal","Drought",2009,26,2
+"Corozal","Drought",2010,26,2
+"Corozal","Drought",2011,26,2
+"Corozal","Drought",2012,26,2
+"Corozal","Drought",2013,26,2
+"Corozal","Drought",2014,26,2
+"Corozal","Drought",2015,26,2
+"Corozal","Drought",2016,26,2
+"Corozal","Drought",2017,26,2
+"Corozal","Drought",2018,26,2
+"Corozal","Drought",2019,1,1
+"Corozal","Drought",2020,26,2
+"Corozal","Drought",2021,26,2
+"Corozal","Drought",2022,26,2
+"Corozal","Drought",2023,26,2
+"Corozal","Drought",2024,26,2
+"Corozal","Drought",2025,26,2
+"Orange Walk","Drought",2000,26,26
+"Orange Walk","Drought",2001,25,3
+"Orange Walk","Drought",2002,25,3
+"Orange Walk","Drought",2003,25,3
+"Orange Walk","Drought",2004,25,3
+"Orange Walk","Drought",2005,25,3
+"Orange Walk","Drought",2006,25,3
+"Orange Walk","Drought",2007,25,3
+"Orange Walk","Drought",2008,25,3
+"Orange Walk","Drought",2009,25,3
+"Orange Walk","Drought",2010,25,3
+"Orange Walk","Drought",2011,25,3
+"Orange Walk","Drought",2012,25,3
+"Orange Walk","Drought",2013,25,3
+"Orange Walk","Drought",2014,25,3
+"Orange Walk","Drought",2015,2,2
+"Orange Walk","Drought",2016,1,1
+"Orange Walk","Drought",2017,25,3
+"Orange Walk","Drought",2018,25,3
+"Orange Walk","Drought",2019,25,3
+"Orange Walk","Drought",2020,25,3
+"Orange Walk","Drought",2021,25,3
+"Orange Walk","Drought",2022,25,3
+"Orange Walk","Drought",2023,25,3
+"Orange Walk","Drought",2024,25,3
+"Orange Walk","Drought",2025,25,3
+"no region","Flood / Excess Rainfall",2000,2,2
+"no region","Flood / Excess Rainfall",2001,26,9
+"no region","Flood / Excess Rainfall",2002,26,9
+"no region","Flood / Excess Rainfall",2003,26,9
+"no region","Flood / Excess Rainfall",2004,26,9
+"no region","Flood / Excess Rainfall",2005,26,9
+"no region","Flood / Excess Rainfall",2006,26,9
+"no region","Flood / Excess Rainfall",2007,26,9
+"no region","Flood / Excess Rainfall",2008,1,1
+"no region","Flood / Excess Rainfall",2009,26,9
+"no region","Flood / Excess Rainfall",2010,7,7
+"no region","Flood / Excess Rainfall",2011,26,9
+"no region","Flood / Excess Rainfall",2012,4,4
+"no region","Flood / Excess Rainfall",2013,26,9
+"no region","Flood / Excess Rainfall",2014,26,9
+"no region","Flood / Excess Rainfall",2015,26,9
+"no region","Flood / Excess Rainfall",2016,5,5
+"no region","Flood / Excess Rainfall",2017,26,9
+"no region","Flood / Excess Rainfall",2018,26,9
+"no region","Flood / Excess Rainfall",2019,26,9
+"no region","Flood / Excess Rainfall",2020,3,3
+"no region","Flood / Excess Rainfall",2021,26,9
+"no region","Flood / Excess Rainfall",2022,6,6
+"no region","Flood / Excess Rainfall",2023,26,9
+"no region","Flood / Excess Rainfall",2024,8,8
+"no region","Flood / Excess Rainfall",2025,26,9

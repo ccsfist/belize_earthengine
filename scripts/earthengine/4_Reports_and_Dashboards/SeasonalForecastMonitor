@@ -1,0 +1,238 @@
+
+
+Map.add(ui.Label('Belize NMS Seasonal Forecast Monitoring', {fontWeight: 'bold', fontSize: '24px'}))
+
+Map.setOptions('SATELLITE');
+
+var forecastFunctions = require('users/maxmauerman/belize_nms:1_HazardMetrics/RainfallFunctions') ;
+
+// set up region / year URL tags
+
+var monitor_year = ui.url.get('year',2022) ;
+var monitor_region = ui.url.get('region',"national") ; 
+
+// params
+
+var clim_years = ee.List.sequence(1983,2020) ;
+var season_start_day = 152 ;
+var season_length = 90 ;
+var monitor_year = ee.Number(monitor_year) ; 
+
+var forecast = ee.Image("projects/ee-maxmauerman/assets/belize_forecast_mu_mar").select("b30").divide(30),
+    forecast_var = ee.Image("projects/ee-maxmauerman/assets/belize_forecast_var_mar").divide(900);
+
+var national =  ee.FeatureCollection('WM/geoLab/geoBoundaries/600/ADM2')
+  .filter(ee.Filter.eq("shapeGroup","BLZ")) ;
+
+var regions = ee.Dictionary([
+  'national',national
+  ])
+
+
+var features = ee.FeatureCollection(regions.get(monitor_region))
+
+var chirps_prelim = ee.ImageCollection('projects/climate-engine-pro/assets/ce-chirps-prelim-pentad').select('precipitation')
+    
+// base map elements
+
+Map.centerObject(features, 8) ;
+
+var empty = ee.Image().byte();
+var outline = empty.paint({
+  featureCollection: features,
+  color: 1,
+  width: 3
+});
+
+
+var pointVis = {
+  min: 400,
+  max: 2000,
+  palette: ['e90000', 'ff4a2d', 'e7eb05','0aab1e'  ,'001137'],
+};
+
+
+Map.addLayer(forecast.clip(features),pointVis,'Point forecast',false) ;
+
+
+/*
+ * Legend setup
+ */
+
+var vis = {
+  min: 0,
+  max: 0.5,
+  palette: ['001137', '0aab1e' , 'e7eb05','ff4a2d' ,'e90000'],
+};
+
+
+// add prob of non-exceedence to map 
+
+ var chirps = ee.ImageCollection("UCSB-CHC/CHIRPS/V3/PENTAD")
+    .select(['precipitation'])
+    .sort('system:time_start') ;
+  
+  var climatology = ee.ImageCollection(
+      ee.FeatureCollection(clim_years.map(function (y) {
+          
+          var firstDoy = ee.Date.fromYMD(y,1,1) ;
+          var startDate = firstDoy.advance(season_start_day-1,'day') ; // start date of ag year
+          var endDate = startDate.advance(season_length,'day') ; // end date of ag year
+        
+          var yearCollection = chirps.filterDate(startDate,endDate);
+            var byYear = ee.ImageCollection(yearCollection.iterate(
+              function (image, acc) {
+                image = ee.Image(image).set('year',ee.String(y)) ;
+                acc = ee.ImageCollection(acc)
+                var last = ee.Image(acc.get('last'))
+                var value = last
+                  .add(image)
+                  .unmask(last)
+                  .copyProperties(image, image.propertyNames())
+                return acc
+                  .merge(ee.ImageCollection([value]))
+                  .set('last', value)
+                  
+                  
+              },
+            ee.ImageCollection([]).set('last', ee.Image(0).rename('precip'))
+          )
+        );
+        return byYear;
+      }))
+    .flatten());
+
+ // compute historical trigger percentile
+  
+  var percentiles = ee.ImageCollection(
+        clim_years.map(function (y) {
+         var yearTotal = climatology
+          .filter(ee.Filter.eq('year',ee.String(y)))
+          .sort('system:time_start',false)
+          .first()
+       
+       return(yearTotal) ;
+  
+    })).reduce(ee.Reducer.percentile([20])).rename('trigger');
+
+
+  var forecastZ = percentiles.subtract(forecast).divide(forecast_var.sqrt())
+  function eeCdf(z) {
+    return ee.Image(0.5)
+        .multiply(ee.Image(1).add(ee.Image(z).divide(ee.Image(2).sqrt()).erf()));
+  } 
+  var forecastTrigProb = eeCdf(forecastZ).rename('forecastTrigProb') ;
+  
+  Map.addLayer(forecastTrigProb.clip(features),vis,"Probability of triggering")
+
+  Map.addLayer(outline, {palette: '000000'}, 'Areas');
+
+
+// Creates a color bar thumbnail image for use in legend from the given color
+// palette.
+function makeColorBarParams(palette) {
+  return {
+    bbox: [0, 0, 1, 0.1],
+    dimensions: '100x10',
+    format: 'png',
+    min: 0,
+    max: 1,
+    palette: palette,
+  };
+}
+
+// Create the color bar for the legend.
+var colorBar = ui.Thumbnail({
+  image: ee.Image.pixelLonLat().select(0),
+  params: makeColorBarParams(vis.palette),
+  style: {stretch: 'horizontal', margin: '0px 8px', maxHeight: '24px'},
+});
+
+// Create a panel with three numbers for the legend.
+var legendLabels = ui.Panel({
+  widgets: [
+    ui.Label(vis.min, {margin: '4px 8px'}),
+    ui.Label(
+        (vis.max-vis.min)/2,
+        {margin: '4px 8px', textAlign: 'center', stretch: 'horizontal'}),
+    ui.Label(vis.max, {margin: '4px 8px'})
+  ],
+  layout: ui.Panel.Layout.flow('horizontal')
+});
+
+var legendTitle = ui.Label({
+  value: 'Probability of drought danger conditions',
+  style: {fontWeight: 'bold'}
+});
+
+// Add the legendPanel to the map.
+var legendPanel = ui.Panel([legendTitle, colorBar, legendLabels]);
+Map.add(legendPanel);
+
+
+// UI
+
+Map.style().set({cursor: 'crosshair'});
+
+var highlight_style = {color: '8856a7', fillColor: '8856a7C0'};
+
+// Create Selector functionality
+var selectedPoints = [];
+
+// Returns the list of admin units the user has selected.
+function getSelectedAdmins() {
+  return features.filterBounds(ee.Geometry.MultiPoint(selectedPoints));
+}
+
+// Updates the chart using the currently-selected features,
+function updateChart() {
+  forecastFunctions.forecastMonitor(clim_years,season_start_day,season_length,monitor_year,
+                                  getSelectedAdmins().geometry(),
+                                  forecast,forecast_var,resultsPanel,resultsPanel2,chirps_prelim)
+  resultsPanel.add(buttonPanel);
+}
+
+// Updates the map overlay using the currently-selected countries.
+function updateOverlay() {
+  var overlay = getSelectedAdmins().style(highlight_style);
+  Map.layers().set(3, ui.Map.Layer(overlay,{opacity:0.5}));
+}
+
+// Clears the set of selected points and resets the overlay and results
+// panel to their default state.
+function clearResults() {
+  selectedPoints = [];
+  Map.layers().remove(Map.layers().get(3));
+  var instructionsLabel = ui.Label('Select regions to view.');
+  resultsPanel.widgets().reset([instructionsLabel]);
+  resultsPanel2.clear()
+  Map.addLayer(getSelectedAdmins().style(highlight_style));
+}
+
+// Register a click handler for the map that adds the clicked point to the
+// list and updates the map overlay and chart accordingly.
+function handleMapClick(location) {
+  selectedPoints.push([location.lon, location.lat]);
+  updateOverlay();
+  updateChart();
+}
+Map.onClick(handleMapClick);
+
+// Panel containing buttons
+var buttonPanel = ui.Panel(
+  [ui.Button("Clear results", clearResults)],
+  ui.Panel.Layout.Flow('horizontal'), {margin: '0 0 0 auto', width: '500px'});
+  
+// Panel containing results
+var resultsPanel = ui.Panel({layout: ui.Panel.Layout.flow('vertical'),
+  style: {position: 'bottom-right'}});
+
+var resultsPanel2 = ui.Panel({layout: ui.Panel.Layout.flow('horizontal'),
+  style: {position: 'bottom-left'}});
+
+  Map.add(resultsPanel);
+  Map.add(resultsPanel2) ;
+  clearResults();
+
+
+  

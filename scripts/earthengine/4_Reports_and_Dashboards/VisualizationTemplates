@@ -1,0 +1,407 @@
+
+// define common color scales / ranges for maps
+
+/// CLIMATE HAZARD ///
+
+// flood (NB: these are meant for MODIS and VIIRS; detailed S1 palette included in functions file)
+
+  /// presence of water (categorical)
+
+var floodPresencePal = {palette:(['03f4fc','03f4fc'])} ; // water, mixed pixels
+
+  /// seasonality (categorical)
+
+var floodSeasonalityPal = {palette:(['1300ad','ff4f27','00c82b','00e4e4'])} ; // permanent, seasonal, flood prone, flood
+
+// rainfall
+
+  /// absolute amount (daily mm; scale for decadal etc.)
+
+var precipitationPal = {
+  min: 1,
+  max: 17,
+  palette: ['001137', '0aab1e', 'e7eb05', 'ff4a2d', 'e90000'],
+};
+
+  /// onset date (change day of year values as context requires)
+
+var onsetPal = {
+  min: 30,
+  max: 80,
+  palette: [
+    '0027FF','FFFFFF','B78200'
+    ]
+};
+
+  /// demise date (change day of year values as context requires)
+
+var demisePal = {
+  min: 110,
+  max: 210,
+  palette: ['B78200','FFFFFF','0027FF']
+};
+
+// soil moisture
+
+  /// absolute amount (daily; scale for decadal etc.)
+
+var soilMoisturePal = {
+  min: 0.0,
+  max: 28.0,
+  palette: ['0300ff', '418504', 'efff07', 'efff07', 'ff0303'],
+};
+
+  /// % dry days
+
+var dryDayPal = {
+  min: 0,
+  max: 1,
+  palette: ['FFFFFF','B78200']
+};
+
+// temperature
+
+  /// absolute amount (degrees c)
+
+var tempPal = {
+  min: -15,
+  max: 50,
+  palette: [
+    '000080', '0000d9', '4000ff', '8000ff', '0080ff', '00ffff',
+    '00ff80', '80ff00', 'daff00', 'ffff00', 'fff500', 'ffda00',
+    'ffb000', 'ffa400', 'ff4f00', 'ff2500', 'ff0a00', 'ff00ff',
+  ]
+};
+
+  /// % hot days
+
+var hotDayPal = {
+  min: 0,
+  max: 1,
+  palette: ['FFFFFF','FF0000']
+};
+
+// vegetation
+
+  /// absolute amount
+
+var ndviPal = {
+  min: 0,
+  max: 9000,
+  palette: [
+    'ffffff', 'ce7e45', 'df923d', 'f1b555', 'fcd163', '99b718', '74a901',
+    '66a000', '529400', '3e8601', '207401', '056201', '004c00', '023b01',
+    '012e01', '011d01', '011301'
+  ],
+};
+
+// standardized anomaly (generic)
+
+var anomalyPal = {
+  min: -3.0,
+  max: 3.0,
+  palette: [
+  'B78200','FFFFFF','0027FF'
+  ],
+};
+
+// percent change (generic)
+
+var pctChgPal = {
+  min: -2.0,
+  max: 2.0,
+  palette: [
+  'B78200','FFFFFF','0027FF'
+  ],
+};
+
+/// EXPOSURE / SUPPLEMENTARY DATA ///
+
+// GeoBoundary
+// for admin selector go to https://code.earthengine.google.com/?scriptPath=users%2Fsat-io%2Fawesome-gee-catalog-examples%3Apopulation-socioeconomics%2FGEOBOUNDARIES
+
+var admin0 = ee.FeatureCollection("projects/sat-io/open-datasets/geoboundaries/CGAZ_ADM0");
+var admin1 = ee.FeatureCollection("projects/sat-io/open-datasets/geoboundaries/CGAZ_ADM1");
+var admin2 = ee.FeatureCollection("projects/sat-io/open-datasets/geoboundaries/CGAZ_ADM2");
+
+var empty = ee.Image().byte();
+var outline = empty.paint({
+  featureCollection: admin0, // change this to visualize outlines of admin areas
+  color: 1,
+  width: 3
+});
+
+
+// World Database of Protected Areas
+
+var wpa = ee.FeatureCollection('WCMC/WDPA/current/polygons');
+var wpaParams = {
+  palette: ['2ed033', '5aff05', '67b9ff', '5844ff', '0a7618', '2c05ff'],
+  min: 0.0,
+  max: 1550000.0,
+  opacity: 0.8,
+};
+var wpaImage = ee.Image().float().paint(wpa, 'REP_AREA');
+
+
+// Global Human Modification
+  /// note: historical snapshots and sub-indices also available on GEE community catalog 
+
+var ghm = ee.Image("projects/sat-io/open-datasets/GHM/ghm_v15_2017_300_60land") ;
+
+var ghmVis = {"min":[0],"max":[1],"palette":["0c0c0c","071aff","ff0000","ffbd03","fbff05","fffdfd"]};
+
+// WorldPop
+  /// note - there are some country-specific higher-res datasets not on GEE catalog. but this one is globaly available 
+  /// note - suggest using focalMean() before using this as a risk multiplier, for easier visualization
+
+var worldPop = ee.ImageCollection('WorldPop/GP/100m/pop');
+
+var worldPopVis = {
+  bands: ['population'],
+  min: 0.0,
+  max: 50.0,
+  palette: ['24126c', '1fff4f', 'd4ff50']
+};
+
+
+// Copernicus Land Cover
+
+var landCover = ee.Image('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019')
+.select('discrete_classification');
+
+
+// NASA SRTM Elevation
+
+var elevation = ee.Image('USGS/SRTMGL1_003').select('elevation');
+var hydroElevation = ee.Image("WWF/HydroSHEDS/30CONDEM").select('b1') ;
+
+// Coastlines / sea level rise 
+
+var watersheds = ee.Image('WWF/HydroSHEDS/03DIR');
+var coastalMask = watersheds.select('b1').eq(0);
+var oceanMask = hydroElevation.gt(0) ;
+var coasts = ee.Image(1).updateMask(coastalMask).focalMean({radius: 10000, kernelType:'circle',units:'meters'}) ;
+
+var coastalElevation = hydroElevation.updateMask(coasts).updateMask(oceanMask) ;
+//Map.addLayer(coastalElevation,{min:0,max:100}) ;
+
+var riskMask = coastalElevation.lt(3) ; // sea level rise in meters; change as needed
+var coastalElevationAtRisk = ee.Image(1).updateMask(riskMask) ;
+//Map.addLayer(coastalElevationAtRisk,{palette:['FFF700']}) ;
+
+// Hansen Global Forest Change 
+
+var hansenForest = ee.Image('UMD/hansen/global_forest_change_2022_v1_10');
+var treeCoverVisParam = {
+  bands: ['treecover2000'],
+  min: 0,
+  max: 100,
+  palette: ['black', 'green']
+};
+
+var treeLossVisParam = {
+  bands: ['lossyear'],
+  min: 0,
+  max: 22,
+  palette: ['yellow', 'red']
+};
+
+
+// Night Lights
+
+var dmspLights = ee.ImageCollection("projects/sat-io/open-datasets/Harmonized_NTL/dmsp"), // 1992-2013 - annual
+    viirsLights = ee.ImageCollection("projects/sat-io/open-datasets/Harmonized_NTL/viirs"); // 2013-2020 - annual 
+
+var lightsVis = {"opacity":1,"bands":["b1"],"min":50,"max":65,"palette":["4d4d4d","878787","bababa","e0e0e0","ffffff","fddbc7","f4a582","d6604d","b2182b","67001f"]};
+
+// Koppen Climate Classification
+  /// class reference available from
+  /// Kottek, M., J. Grieser, C. Beck, B. Rudolf, and F. Rubel, 2006: World Map of the  
+  /// Köppen-Geiger climate classification updated. Meteorol. Z., 15, 259-263.
+
+var koppen = ee.Image("projects/tetratechmm/assets/koppen") ;
+
+var koppenVis = {min:1,max:32,palette:(["960000", "FF0000", "FF6E6E", "FFCCCC", "CC8D14", "CCAA54", "FFCC00", "FFFF64", "007800", "005000", "003200", "96FF00", "00D700", "00AA00", "BEBE00", "8C8C00", "5A5A00", "550055", "820082", "C800C8", "FF6EFF", "646464", "8C8C8C", "BEBEBE", "E6E6E6", "6E28B4", "B464FA", "C89BFA", "C8C8FF", "6496FF", "64FFFF", "F5FFFF"])} ;
+var koppenLevels = (['Af', 'Am', 'As', 'Aw', 'BSh', 'BSk', 'BWh', 'BWk', 'Cfa', 'Cfb','Cfc', 'Csa', 'Csb', 'Csc', 'Cwa','Cwb', 'Cwc', 'Dfa', 'Dfb', 'Dfc','Dfd', 'Dsa', 'Dsb', 'Dsc', 'Dsd','Dwa', 'Dwb', 'Dwc', 'Dwd', 'EF','ET', 'Ocean']) ;
+
+// FEWSNet Livelihood Zones
+  /// note: these are unique to each country. consult the LZNAME variable for reference
+
+var fews_livelihood = ee.FeatureCollection("projects/tetratechmm/assets/fews_lz") ;
+
+//var fews_selected = fews_livelihood.filter(ee.Filter.eq('COUNTRY','ET')) ; // change as desired
+//var fews_outline = ee.Image().byte().paint({
+//  featureCollection: fews_selected,
+//  color: "LZNUM"
+//}) ;
+
+//Map.addLayer(fews_outline.randomVisualizer(),{},"Ethiopia livelihood zones") ;
+
+// FEWSNet IPC - example
+  /// note: FEWS polygons aren't consistent over time. so I turn this into an ImageCollection
+  /// in the future, use FEWSNet API and / or batch upload via google cloud cmd line to get all of these at once
+
+var fews = ee.FeatureCollection('projects/tetratechmm/assets/fews_et_2018_02').reduceToImage({
+  properties: ['CS'],
+  reducer: ee.Reducer.mean()
+}) ;
+
+var fewsMask = fews.gt(5).not() ;
+
+var fews = fews.updateMask(fewsMask) ;
+
+var fews_vis = {min:1,max:5,palette:(["2B83BA","ABDDA4","FFFFBF","FDAE61","D7191C"])} ;
+
+// DFO
+
+var dfo = ee.FeatureCollection('projects/tetratechmm/assets/dfo').map(function(feat){
+  return feat
+    .set('start_date',ee.Date(feat.get('BEGAN')))
+    .set('end_date',ee.Date(feat.get('ENDED')))
+    .set('system:time_start',ee.Date(feat.get('BEGAN'))) ;
+}) ;
+
+  /// example of study area for subsequent calculations
+var study_area = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level1")
+  .filter(ee.Filter.eq('ADM0_NAME','Zambia'))
+  .filter(ee.Filter.eq('ADM1_NAME','Southern')) ;
+
+var study_area = ee.Feature(study_area.first()) ;
+
+var dfo_selected = dfo.map(function(feat){
+    return feat.set('intersects',feat.intersects(study_area)) ;
+  })
+  .filter(ee.Filter.eq('intersects',true))
+  .filter(ee.Filter.calendarRange(2000,2023,'year'));
+
+var dfoChart = ui.Chart.feature
+  .byFeature({
+    features: dfo_selected,
+    xProperty: 'start_date',
+    yProperties: ['SEVERITY']
+  })
+  .setChartType('ScatterChart')
+  .setOptions({vAxis:{
+    viewWindow: {min:0, max:2}
+  }});
+print(dfoChart)
+
+// EMDAT
+/// nb - filter by country (e.g.) first to speed up computation time 
+
+var emdat = ee.FeatureCollection('projects/tetratechmm/assets/EMDAT')
+  .filter(ee.Filter.eq('Country','Zambia')) ; // change as needed
+var gaul_adm0 = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level0") ;
+var gaul_adm1 = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level1") ;
+var gaul_adm2 = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level2") ;
+
+var emdat_adm1 = emdat.filter(ee.Filter.inList('Adm Level',ee.List(['1'])))
+    .filter(ee.Filter.notEquals('Start Month',null));
+var emdat_adm1_nomonth = emdat.filter(ee.Filter.inList('Adm Level',ee.List(['1'])))
+    .filter(ee.Filter.eq('Start Month',null))
+    .map(function(feat){
+      return feat.set('Start Month',1) ;
+    });  
+var emdat_adm1_merged = emdat_adm1.merge(emdat_adm1_nomonth) ;
+
+var emdat_adm2 = emdat.filter(ee.Filter.inList('Adm Level',ee.List(['1;2','2'])))
+    .filter(ee.Filter.notEquals('Start Month',null)) ;
+var emdat_adm2_nomonth = emdat.filter(ee.Filter.inList('Adm Level',ee.List(['1;2','2'])))
+    .filter(ee.Filter.eq('Start Month',null))
+    .map(function(feat){
+      return feat.set('Start Month',1) ;
+    });    
+var emdat_adm2_merged = emdat_adm2.merge(emdat_adm2_nomonth) ;
+
+var gaul_countries = gaul_adm0.aggregate_array('ADM0_NAME').distinct() ;
+var emdat_adm0 = emdat.filter(ee.Filter.eq('Adm Level',''))
+  .filter(ee.Filter.notEquals('Start Month',null))
+  .filter(ee.Filter.inList('Country',gaul_countries)) ;
+
+var emdat_adm0_nomonth = emdat.filter(ee.Filter.eq('Adm Level',''))
+  .filter(ee.Filter.eq('Start Month',null))
+  .filter(ee.Filter.inList('Country',gaul_countries))
+  .map(function(feat){
+      return feat.set('Start Month',1) ;
+    });  
+var emdat_adm0_merged = emdat_adm0.merge(emdat_adm0_nomonth) ;
+
+var emdat_adm1 = emdat_adm1_merged.map(function(feat) {
+  
+  var adminList = ee.String(feat.get('Admin1 Code')).split(';')
+  .map(function (string) { return ee.Number.parse(string)});
+  
+  var gaul_selected = gaul_adm1
+    .filter(ee.Filter.inList('ADM1_CODE',adminList)) ;
+  
+  var year = feat.get('Start Year') ;
+  var month = feat.get('Start Month') ;
+  
+  return feat
+    .set('start_date',ee.Date.fromYMD(year,month,1))
+    .setGeometry(gaul_selected.geometry().simplify(1000)) ;
+  
+}) ;
+
+var emdat_adm2 = emdat_adm2_merged.map(function(feat) {
+  
+  var adminList = ee.String(feat.get('Admin2 Code')).split(';')
+  .map(function (string) { return ee.Number.parse(string)});
+  
+  var gaul_selected = gaul_adm2
+    .filter(ee.Filter.inList('ADM2_CODE',adminList)) ;
+  
+  var year = feat.get('Start Year') ;
+  var month = feat.get('Start Month') ;
+  
+  return feat
+    .set('start_date',ee.Date.fromYMD(year,month,1))
+    .setGeometry(gaul_selected.geometry().simplify(1000)) ;
+  
+}) ;
+
+var emdat_adm0 = emdat_adm0_merged.map(function(feat) {
+  
+  var admin = ee.String(feat.get('Country')) ;
+  var gaul_selected = gaul_adm0
+    .filter(ee.Filter.eq('ADM0_NAME',admin)) ;
+  
+  var year = feat.get('Start Year') ;
+  var month = feat.get('Start Month') ;
+  
+  return feat
+    .set('start_date',ee.Date.fromYMD(year,month,1))
+    .setGeometry(gaul_selected.geometry().simplify(1000)) ;
+  
+}) ;
+
+var emdat_adm2_selected = emdat_adm2.map(function(feat){
+  return feat.set('selected',feat.intersects(study_area.bounds(),1000)) ;
+}).filter(ee.Filter.eq('selected',true)) ;
+
+var emdat_adm1_selected = emdat_adm1.map(function(feat){
+  return feat.set('selected',feat.intersects(study_area.bounds(),1000)) ;
+}).filter(ee.Filter.eq('selected',true)) ;
+
+var emdat_adm0_selected = emdat_adm0 ;
+
+var emdat_all = emdat_adm2_selected.merge(emdat_adm1_selected).merge(emdat_adm0_selected) ;
+
+var max_emdat = ee.Number(emdat_all.aggregate_max('Total Affected')) ;
+
+
+
+var emdatChart = ui.Chart.feature
+  .groups({
+    features: emdat_all,
+    xProperty: 'start_date',
+    yProperty: ['Total Affected'],
+    seriesProperty: 'Disaster Type'
+  })
+  .setChartType('ScatterChart')
+  .setOptions({vAxis:{
+    viewWindow: {min:0, max:max_emdat},
+    logScale: true 
+  }}) ;
+print(emdatChart)

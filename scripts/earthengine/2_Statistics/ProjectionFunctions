@@ -1,0 +1,90 @@
+
+// calculate % change ensemble stats in projected climate over time frame
+  /// quantities: precip, max temp
+  /// could be extended to derived measures, like # dry days, in addition to simple sum (just change lines 62, 71)
+
+// NOTE: for longer reference periods, this hits memory limits when running in real time. consider exporting first.
+
+var climChangeProjection = function(baseline_year_start, baseline_year_end, projection_year_start,
+  projection_year_end, target_month_start, target_month_end, indicator, scenario) {
+    
+   // baseline_year_start: integer [1950-2015]; first year for computing historical baseline
+   // baseline_year_start: integer [1950-2015]; last year for computing historical baseline
+   // projection_year_start: integer [2015-2099]; first year for projection period
+   // projection_year_end: integer [2015-2099]; last year for projection period
+   // target_month_start: integer; first month of target season
+   // target_month_end: integer; last month of target season
+   // indicator: string ['pr','tasmin','tasmax']: which climate variable to use 
+   // scenario: string ['ssp245', 'ssp585']; which emissions scenario to use for projections?
+    
+  var completeModels = ee.List(['ACCESS-CM2','ACCESS-ESM1-5','CanESM5','CMCC-ESM2','CNRM-CM6-1',
+    'CNRM-ESM2-1','EC-Earth3','EC-Earth3-Veg-LR','FGOALS-g3','GFDL-ESM4','GISS-E2-1-G','INM-CM4-8','INM-CM5-0',
+    'KACE-1-0-G','MIROC-ES2L','MPI-ESM1-2-HR','MPI-ESM1-2-LR','MRI-ESM2-0',
+    'NorESM2-LM','NorESM2-MM','TaiESM1','UKESM1-0-LL']) ;
+    
+  var raw_data = ee.ImageCollection("NASA/GDDP-CMIP6").filter(ee.Filter.inList('model',completeModels)) ;
+    
+  var ensembleStats = ee.Reducer.median().combine({
+        reducer2: ee.Reducer.percentile([25,75]),
+        sharedInputs: true
+       }) ;
+       
+  var summaryStats = ee.Reducer.mean().combine({
+        reducer2: ee.Reducer.stdDev(),
+        sharedInputs: true
+       }) ;
+    
+  var baseline_years_list = ee.List.sequence(baseline_year_start,baseline_year_end) ;
+    
+  var projection_years_list = ee.List.sequence(projection_year_start,projection_year_end) ;
+  
+  var baseline = raw_data
+      .filter(ee.Filter.eq('scenario','historical'))
+      .select([indicator],['indicator']) ;
+
+  var projection = raw_data
+      .filter(ee.Filter.eq('scenario','ssp245'))
+      .select([indicator],['indicator']) ;
+
+  // by model...
+    // by year (for both baseline and projection  periods)...
+      // compute annual summary measure 
+    // compute mean and sd 
+  // compute median, 25th, 75 percentile anomalies
+  
+  var byModel = ee.ImageCollection(
+      completeModels.map(function (model) {
+        
+        var baselineSummary = ee.ImageCollection(
+        baseline_years_list.map(function(year) {
+          var oneYear = baseline.filter(ee.Filter.eq('model',model))
+            .filter(ee.Filter.calendarRange(year, year, 'year'))
+            .filter(ee.Filter.calendarRange(target_month_start,target_month_end,'month'))
+            .sum(); 
+          return oneYear.set('year', ee.String(year)) ;
+        })).reduce(summaryStats) ;    
+        
+        var projectionSummary = ee.ImageCollection(
+        projection_years_list.map(function(year) {
+          var oneYear = projection.filter(ee.Filter.eq('model',model))
+            .filter(ee.Filter.calendarRange(year, year, 'year'))
+            .filter(ee.Filter.calendarRange(target_month_start,target_month_end,'month'))
+            .sum()
+            .subtract(baselineSummary.select('indicator_mean'))
+            .divide(baselineSummary.select('indicator_stdDev')); 
+          return oneYear.set('year', ee.String(year)) ;
+        })).reduce(summaryStats) ;
+    
+      return projectionSummary ;
+    
+  })) ;    
+  
+  var modelSummary = byModel.reduce(ensembleStats) ;
+
+  return modelSummary ;
+ 
+} ;
+
+
+
+exports.climChangeProjection = climChangeProjection ;

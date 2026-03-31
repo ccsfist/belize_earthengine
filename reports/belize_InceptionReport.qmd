@@ -1,0 +1,555 @@
+---
+title: "Belize Climate Risk Assessment: Inception Report"
+author: "IRI/NCDP, Columbia University"
+date: today
+jupyter: python3
+execute:
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    theme: cosmo
+  pdf:
+    toc: true
+    toc-depth: 3
+    documentclass: article
+    geometry:
+      - margin=1in
+---
+
+## Executive Summary
+
+This Inception Report outlines the detailed methodology, tools, and workplan for the Belize climate risk assessment project. The report consolidates the approach for data collection, analysis, and community engagement, building on the desk review findings presented in the Situational Analysis Report. This document provides:
+
+- Detailed methodology including tools for data/information gathering
+- Quality assurance mechanisms
+- Data/information collection processes
+- Analysis methodologies
+- Fieldwork plan (to be finalized after discussions with NMS and NEMO)
+- Final Workplan with Gantt Chart
+
+---
+
+## Detailed Methodology
+
+### Tools for Data and Information Gathering
+
+The project will employ a combination of technical tools and participatory methodologies to gather comprehensive data and information:
+
+**Technical Data Collection Tools:**
+
+- **Earth Observation and Satellite Data:** Google Earth Engine (GEE) for accessing and processing satellite datasets, including precipitation, temperature, soil moisture, and other climate variables
+- **Climate Data Tools (CDT):** IRI's software package for quality control of climate data
+- **Climate Predictability Tool (CPT):** User-friendly platform for producing tailored seasonal climate forecasts
+- **ENACTS Initiative:** Methods, tools and training for developing high-resolution climate datasets and Maprooms
+- **Geographic Information Systems (GIS):** For spatial analysis and mapping of hazards, exposure, and vulnerability
+
+**Participatory Data Collection Tools:**
+
+- **Farmer Focus Group Methodologies:** Structured community discussions to elicit historical risk years
+- **Mobile Crowdsourcing Tools:** WhatsApp-based tools for scalable data collection
+- **Interactive Educational Exercises:** Games and simulations to understand household-level decisions
+- **Data Cleaning and Reconciliation Tools:** Centralized platforms for quality-checking crowdsourced data
+
+### Quality Assurance Mechanisms
+
+**Data Quality Control:**
+
+1. **Automated Quality Checks:** Use IRI Climate Data Tools (CDT) for systematic quality control of climate data, including:
+   - Detection of outliers and missing values
+   - Consistency checks across datasets
+   - Temporal and spatial validation
+
+2. **Multi-Source Validation:** Cross-validate data from multiple sources:
+   - Compare satellite data with ground-based observations
+   - Validate community recall against historical climate records
+   - Cross-reference ministry consultations with technical assessments
+
+3. **Community Data Quality Assurance:**
+   - Visualize crowdsourced data on historical risk years over multiple spatial scales
+   - Identify and correct probable errors through centralized quality-checking tools
+   - Integrate multiple observational datasets and qualitative data using information theory-based methodologies
+
+4. **Expert Review:** Regular review by project team and stakeholders to ensure data quality and relevance
+
+### Data and Information Collection Processes
+
+**Desk Review Process:**
+
+- Review existing data, information, maps and studies for the project area
+- Conduct gap assessment of previous risk and vulnerability assessments
+- Compile comprehensive data inventory (see Data Inventory section below)
+- Analyze existing forecast products and data availability
+
+**Stakeholder Consultation Process:**
+
+- Conduct consultations with government ministries and agencies (see Ministry Consultations section below)
+- Engage with National Meteorological Service (NMS) and National Emergency Management Organisation (NEMO)
+- Identify priority hazards, preferred datasets, and community validation capacity
+- Document stakeholder requirements for forecasts and warnings
+
+**Community Engagement Process:**
+
+- Identify priority use cases for community validation
+- Conduct Farmer Focus Groups using IRI's standardized methodology
+- Employ multiple engagement modalities (in-person focus groups, mobile crowdsourcing, interactive exercises)
+- Validate metrics and decision rules through community engagement
+- Fill data gaps where official monitoring networks are sparse
+
+### Analysis Methodologies
+
+**Hazard Analysis:**
+
+- Analyze hazard characteristics (intensity, frequency, probability) using historical data
+- Evaluate climate variables and climate change scenarios
+- Develop hazard maps linking forecasts and vulnerabilities
+- Use GEE maprooms to visualize hazard, exposure and vulnerability layers
+
+**Vulnerability and Exposure Analysis:**
+
+- Conduct community vulnerability analysis for relevant natural hazards
+- Analyze community practices for natural resources management
+- Estimate potential human and economic losses based on exposure and vulnerability
+- Assess factors affecting community capacity for risk and impact assessments
+
+**Forecast Integration:**
+
+- Co-identify relevant weather and climate parameters
+- Establish critical threshold values for hazard warnings
+- Develop understandable, recognizable, and timely warnings for NMS and NEMO
+- Link forecasts with vulnerabilities for the project area
+
+---
+
+## Ministry Consultations
+
+*This section summarizes consultations conducted with government ministries and agencies regarding priority natural hazards, preferred datasets, and capacity for community validation.*
+
+### Ministry Contacts
+
+| Ministry | Contact |
+|----------|---------|
+| **Hydrology (NHS)** | Tennielle Hendy; chief@nhs.gov.bz |
+| **Tourism** | Darcy Correa; darcy.correa@tourism.gov.bz |
+| **Coastal Zone Management (CZMAI)** | Mrs. Arlene Young (director@coastalzonebelize.org); Mr. Isreal Correa (gismanager@coastalzonebelize.org); Ms. Chelsea Perrera (coastalplanner@coastalzonebelize.org) |
+| **Livestock** | William Usher; ceo@belizelivestock.org |
+| **Forestry** | Wilfredo Zetina; ZetinaW@gobmail.gov.bz |
+| **Sustainability / Climate Change** | Judene Tingling-Linares; coord.pppu@environment.gov.bz |
+
+### Ministry Priorities and Capacity
+
+| Ministry | Priority Hazards | Preferred Datasets | Community Validation Capacity |
+|----------|------------------|-------------------|------------------------------|
+| **Hydrology (NHS)** | - Floods (all types); - Drought | - Twice daily river levels for floods; - Coastal environment data for coastal flooding (needed); - Groundwater levels data nationally for hydrological drought (needed) | Limited due to human resources; can execute where suitable. Primary contact: Tennielle Hendy. Community members read staff gauges; annual training sessions conducted. |
+| **Tourism** | - Hurricane; - Flood; - Drought; - Heat waves; - Lightning Storms | - Relevant weather station data country wide; - Gauging stations along rivers | Not specified |
+| **Coastal Zone Management (CZMAI)** | **Long-term:** - Increasing sea surface temperature; - Sea level rise. **Short-term:** - Hurricanes/storm surges | - Global datasets on sea temperature rise from satellite sensors; - Sea level data from sea loggers/satellite altimetry/tide gauges; - Hurricane and storm surge forecasts with at least 3 days' notice | CZMAI has capacity and is willing to aid in community validation for risk analysis |
+| **Livestock** | 1. Flood; 2. Heat Stress Index (Temperature & Humidity) | - Rain Intensity; - Temperature and Humidity | No capacity available |
+| **Forestry** | - Wildland fires; - Drought; - Hurricanes | - Any relevant datasets that are available | Contact person: Wilfredo Zetina. Would need assistance from team at main office (only two officers at San Ignacio station) |
+| **Sustainability / Climate Change** | 1. Flooding [Rainfall; discharge, soil moisture]; 2. Tropical cyclones; 3. Wildfires [thermal hotspots/satellite imagery]; 4. Drought (Standardized Precipitation Indices, SPIs) | - Rainfall and discharge data for flooding; - Soil moisture data; - Thermal hotspots/satellite imagery for wildfires; - Standardized Precipitation Indices (SPIs) for drought monitoring | Capacity exists in different departments; human resource limitation to actively participate might be challenging |
+
+---
+
+## NMA Forecast Products
+
+*Information in this section is based on desk review of NMA forecast products and consultation notes.*
+
+The National Meteorological Agency (NMA) provides forecast products, though their website reliability is a concern. The NMA is the primary government agency responsible for meteorological services in Belize:
+
+1. **Seasonal Forecast:** IRI-style seasonal forecast available
+2. **Agricultural Forecast:** Shorter-term agricultural forecast available
+3. **Common Alerting Protocol (CAP):** Belize is currently implementing this common standard for short-term disaster alerts via SMS. CAP is an international standard format for exchanging emergency alerts and public warnings.
+
+**Limitations and Data Access Challenges:**
+
+1. **Website reliability issues:** The NMA website has been noted as unreliable, which poses challenges for accessing current forecast information.
+
+2. **Historical forecast data access:** There is no straightforward way to access historical forecast information from the NMA. This limitation affects the ability to:
+   - Validate forecast skill and accuracy over time
+   - Conduct retrospective analyses of forecast performance
+   - Develop forecast-based action triggers based on historical patterns
+
+3. **Alternative data sources:** Given these limitations, the following alternative approaches should be considered:
+   - **Public forecast products:** Explore publicly available forecast products from international sources that may provide historical data and verification records
+   - **Collaborative research:** Leverage ongoing collaborative research on NextGen forecasting methodology that may provide alternative forecast data sources or historical records
+   - **Direct engagement:** Continue engagement with NMA to explore potential data sharing agreements or alternative access methods for historical forecast information
+
+---
+
+## Data Inventory
+
+*This section presents the comprehensive data inventory compiled during the desk review process, identifying candidate datasets for the climate risk assessment and maptool development.*
+
+The following datasets have been identified for the Belize climate risk assessment project. These datasets are organized by category: **Hazard**, **Exposure/Vulnerability/Impact**, and **Forecasts/Projections**. This inventory serves as a foundation for:
+
+- Identifying candidate datasets for the design dashbboard development
+- Understanding data availability and gaps across hazard, exposure, and vulnerability dimensions
+- Informing data acquisition and integration strategies
+- Supporting community validation efforts by identifying where local information can fill data gaps
+
+The data inventory is generated from an Excel workbook containing multiple sheets. Each category is processed and displayed as a formatted table below. The inventory includes datasets relevant for:
+
+- **Hazard assessment:** Datasets for measuring and monitoring priority natural hazards identified through ministry consultations
+- **Exposure and vulnerability:** Datasets for understanding what and who is at risk, including population, infrastructure, and socioeconomic indicators
+- **Forecasts and projections:** Datasets for climate risk assessment and future climate scenarios
+
+```{python}
+#| label: data-inventory
+#| echo: false
+#| output: asis
+#| fig-cap: "Data inventory tables generated from Excel workbook"
+import pandas as pd
+from pathlib import Path
+
+# Read the Excel file containing data inventory sheets
+excel_file = Path("Belize Data Inventory.xlsx")
+xl_file = pd.ExcelFile(excel_file)
+
+# Function to convert dataframe to markdown table format
+# This ensures proper formatting for display in the rendered document
+def df_to_markdown(df):
+    """Convert pandas DataFrame to markdown table format"""
+    # Replace NaN with empty string
+    df = df.fillna('')
+    
+    # Get column names
+    cols = list(df.columns)
+    
+    # Create header
+    markdown = "| " + " | ".join(cols) + " |\n"
+    markdown += "| " + " | ".join(["---"] * len(cols)) + " |\n"
+    
+    # Add rows
+    for _, row in df.iterrows():
+        values = [str(val).replace('|', '\\|') for val in row.values]
+        markdown += "| " + " | ".join(values) + " |\n"
+    
+    return markdown
+
+# Process each sheet and output tables
+# Maps Excel sheet names to section headings in the document
+sheet_mapping = {
+    'Hazard': '### Hazard Datasets',
+    'Exposure, Vulnerability, Impact': '### Exposure, Vulnerability, Impact Datasets',
+    'Forecasts, Projections': '### Forecasts, Projections Datasets'
+}
+
+# Iterate through sheets and generate formatted tables
+for sheet_name in xl_file.sheet_names:
+    if sheet_name in sheet_mapping:
+        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        print(f"\n{sheet_mapping[sheet_name]}\n")
+        print(df_to_markdown(df))
+```
+
+---
+
+## Community Information Integration
+
+*This section outlines the approach for incorporating community information into the risk analysis, based on desk review findings, ministry consultation feedback, and IRI methodologies for climate risk assessment.*
+
+### IRI Methodologies for Community Engagement
+
+The integration of community information will leverage IRI's standardized methodologies that have been successfully applied at scale in multiple countries:
+
+**Farmer Focus Group Methodologies:** IRI's participatory approach employs structured community discussions to elicit historical risk years from farmers. This methodology enables communities to rank their worst disaster years for specific hazards (e.g., drought, flooding), which can then be compared against climate data to validate forecast decision rules. For example, a drought action rule meant to trigger during a 1-in-5-year drought can be validated against the worst years farmers recall from the past 40 years. The methodology is based on consensus-building among community members, ensuring that the final result represents collective local knowledge.
+
+**Interactive Educational Exercises:** IRI's approach includes "games" or simulations that demonstrate potential household-level decisions that climate risk assessment can inform, while simultaneously understanding farmers' typical production and investment constraints. These exercises help elucidate the theory of change for climate risk assessment and check its plausibility: for example, understanding whether farmers would make productive investments (like improved seeds) if climate risk information could inform input decisions before a drought year.
+
+**Mobile Crowdsourcing Tools:** In cases where financial, logistical, or safety constraints limit the feasible scale of in-person focus groups, IRI has developed mobile tools leveraging commonly used messaging platforms like WhatsApp. These tools use behavioral design elements and incentives to elicit reliable responses from farmers, enabling scalable data collection. These tools have been successfully piloted with hundreds of farmers and include dashboards that allow non-technical users to deploy, customize, and monitor survey campaigns.
+
+**Data Cleaning and Reconciliation Tools:** Given that community-generated data is subject to entry errors, inaccurate recall, and other complexities, IRI has developed tools to help local users visualize crowdsourced data on historical risk years over multiple spatial scales, identify probable errors, and enter corrections via a centralized ledger. Additionally, IRI has developed a methodology based on information theory for integrating multiple observational datasets and qualitative data (like farmers' recall) into a holistic assessment of historical drought tendency.
+
+**Seasonal Assessment Methodology:** A critical component of climate risk assessment is continual monitoring throughout the season to assess policy performance, identify gaps, and reconcile stakeholders' expectations. IRI's seasonal assessment methodology draws on multiple sources of data, including biophysical measurements, crowdsourced reports from farmers, and humanitarian food security monitoring, presenting stakeholders with structured questions to gather informed assessments of seasonal conditions.
+
+**IRI Tool Platforms and Resources:**
+
+- **Forecast Action Planning Tools:** Interactive map tools for visualizing forecasted disaster severity and evaluating decision rules (example: http://iridl.ldeo.columbia.edu/fbfmaproom2/ethiopia-ond). These tools allow users to adjust outcome types and severity thresholds, incorporate observational data, and evaluate historical performance.
+
+- **Data Cleaning Tools:** Centralized platforms for quality-checking crowdsourced data (example: https://fist-cleandat.iri.columbia.edu/comzambia). These tools enable visualization of historical risk years over multiple spatial scales and error correction via centralized ledgers.
+
+- **Decision Support Tools:** Interactive tools for developing and evaluating AA decision rules, including examples from index insurance applications (https://fist-shiny.iri.columbia.edu/shiny_apps/Apps/Zambia_Window_consolidation_app/, https://fist-shiny.iri.columbia.edu/shiny_apps/Apps/zambia_optimization_app/).
+
+- **AA Training Materials:** Comprehensive training resources for AA trigger development (example: https://fist.iri.columbia.edu/publications/docs/Lesotho_FbF_Material2022/ - username: FBFLesotho, password: resilience).
+
+- **Next Generation Drought Index (NGDI):** Participatory tool for co-generation and evaluation of satellite datasets and insurance solutions (https://bit.ly/WBIRISenOpt - username: WB, password: IRI).
+
+- **Seasonal Assessment Resources:** Methodology documentation and examples (https://fist.iri.columbia.edu/publications/docs/r4mozEOS2022/).
+
+- **IRI Climate Data Tools (CDT):** Software package for quality control of climate data (https://iri.columbia.edu/our-expertise/climate/tools/cdt/).
+
+- **IRI Climate Predictability Tool (CPT):** User-friendly platform for producing tailored seasonal climate forecasts (https://iri.columbia.edu/our-expertise/climate/tools/cpt/).
+
+- **ENACTS Initiative:** Methods, tools and training for developing high-resolution climate datasets and Maprooms (https://iri.columbia.edu/resources/enacts/).
+
+### Integration Strategy
+
+The community information integration process will follow an enhanced approach that incorporates IRI methodologies:
+
+1. **Identify relevant use cases:** Identify priority use cases that would benefit from community validation and local knowledge integration, focusing on hazards where community input can fill critical data gaps or validate technical assessments.
+
+2. **Historical risk event validation:** Conduct Farmer Focus Groups using IRI's standardized methodology to elicit community-identified historical disaster years. This information is critical for retrospective evaluation of climate risk assessment decision rules, ensuring that forecast triggers align with community experiences of actual disaster events.
+
+3. **Gather community information:** Employ multiple engagement modalities:
+   - **In-person focus groups:** Structured community discussions in accessible locations with special consideration for indigenous communities in Toledo requiring culturally-appropriate engagement
+   - **Mobile crowdsourcing:** WhatsApp-based tools for areas where in-person focus groups are constrained by logistics, safety, or financial limitations
+   - **Interactive educational exercises:** Games and simulations to understand household-level decisions and validate the theory of change for climate risk assessment interventions
+
+4. **Validate metrics and decision rules:** Validate risk metrics, hazard indicators, and forecast decision rules through community engagement:
+   - Compare technical assessments against local experiences and observations
+   - Validate that climate risk assessment triggers would have captured known historical disaster events
+   - Ensure decision rules align with community-identified worst years for each hazard
+   - Use community input to refine trigger thresholds and action protocols
+
+5. **Fill data gaps:** Frame community information collection as a means to fill gaps in existing data sources, particularly where:
+   - Official monitoring networks are sparse (e.g., groundwater levels for hydrological drought, upper catchment river gauges)
+   - Historical records are incomplete (e.g., EMDAT data limitations for Belize)
+   - Local impacts and vulnerabilities are not captured in national datasets
+   - Community-specific adaptation strategies and capacities need documentation
+
+6. **Data quality assurance:** Implement IRI's data cleaning and reconciliation processes:
+   - Visualize crowdsourced data on historical risk years over multiple spatial scales
+   - Identify and correct probable errors through centralized quality-checking tools
+   - Integrate multiple observational datasets and qualitative data using information theory-based methodologies
+
+7. **Seasonal monitoring:** Establish continual monitoring protocols using IRI's seasonal assessment methodology, drawing on biophysical measurements, crowdsourced farmer reports, and humanitarian food security monitoring to assess climate risk assessment policy performance throughout the season.
+
+### Technology Platforms and Decision Support
+
+**Decision Support Tools Integration:** Community input will directly inform the development and evaluation of climate risk assessment decision rules using IRI's decision support methodology. This includes:
+- Creating an inventory of threshold/trigger methodologies used by stakeholders to enhance harmonization
+- Generating lists of known historical disaster events for each region and sector to validate decision rule performance
+- Developing trainings for applicable agencies on the use of triggers and impact-based thresholds
+- Creating learning notes that explain the complete trigger/threshold development process
+
+**Participatory Validation:** Community recall of historical disaster years will be systematically compared against climate data to validate forecast decision rules. This participatory validation ensures that technical climate risk assessment triggers capture events that communities recognize as disasters, reducing basis risk and increasing community trust in the system.
+
+**Multi-Source Integration:** Community data will be integrated with:
+- Biophysical measurements (satellite data, gauge readings, weather station data)
+- Humanitarian food security monitoring (IPC/VAM assessments)
+- Government administrative data
+- Expert knowledge from ministry consultations
+
+This multi-source approach enables a holistic assessment of historical risk tendency and strengthens the foundation for climate risk assessment decision rules.
+
+---
+
+## Fieldwork Plan
+
+*This section will be finalized after discussions with the National Meteorological Service (NMS) and National Emergency Management Organisation (NEMO).*
+
+The fieldwork plan will include:
+
+- **Community engagement locations:** Identification of priority communities for focus groups and participatory activities
+- **Stakeholder consultation schedule:** Coordination with NMS, NEMO, and other key stakeholders
+- **Data collection timeline:** Schedule for community validation activities, focus groups, and mobile crowdsourcing campaigns
+- **Logistical considerations:** Access, safety, and cultural considerations for fieldwork activities
+- **Community validation protocols:** Detailed procedures for conducting focus groups, games, and mobile data collection
+
+*Note: The detailed fieldwork plan will be developed in coordination with NMS and NEMO following the inception phase.*
+
+---
+
+## Final Workplan with Gantt Chart
+
+This section presents the final workplan with a Gantt chart showing project tasks, timeline, and delivery schedule based on the project deliverables.
+
+### Task Summary Table
+
+```{python}
+#| label: task-summary
+#| echo: false
+#| output: asis
+import pandas as pd
+from pathlib import Path
+from datetime import datetime
+
+# Read the CSV file
+csv_file = Path("Dsp60QzT - wfp-belize.csv")
+df = pd.read_csv(csv_file)
+
+# Filter out References list
+df = df[df['List Name'].isin(['Deliverables', 'Completed'])]
+
+# Parse dates
+df['Due Date'] = pd.to_datetime(df['Due Date'], errors='coerce')
+
+# Create summary table
+summary_df = df[['Card Name', 'Due Date', 'List Name']].copy()
+summary_df = summary_df.sort_values('Due Date')
+summary_df['Due Date'] = summary_df['Due Date'].dt.strftime('%Y-%m-%d')
+summary_df.columns = ['Task', 'Due Date', 'Status']
+
+# Convert to markdown
+def df_to_markdown(df):
+    """Convert pandas DataFrame to markdown table format"""
+    df = df.fillna('')
+    cols = list(df.columns)
+    markdown = "| " + " | ".join(cols) + " |\n"
+    markdown += "| " + " | ".join(["---"] * len(cols)) + " |\n"
+    for _, row in df.iterrows():
+        values = [str(val).replace('|', '\\|') for val in row.values]
+        markdown += "| " + " | ".join(values) + " |\n"
+    return markdown
+
+print(df_to_markdown(summary_df))
+```
+
+### Gantt Chart
+
+```{python}
+#| label: gantt-chart
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+#| dpi: 300
+#| fig-cap: "Project Workplan Gantt Chart"
+#| fig-pos: "H"
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import timedelta
+from pathlib import Path
+import numpy as np
+import textwrap
+
+# Configure matplotlib for PDF optimization
+plt.rcParams.update({
+    'font.size': 10,
+    'axes.labelsize': 12,
+    'axes.titlesize': 14,
+    'xtick.labelsize': 10,
+    'ytick.labelsize': 9,
+    'legend.fontsize': 10,
+    'figure.titlesize': 16,
+})
+
+# Read and process CSV file
+csv_file = Path("Dsp60QzT - wfp-belize.csv")
+df = pd.read_csv(csv_file)
+
+# Filter to only include Deliverables and Completed tasks
+df = df[df['List Name'].isin(['Deliverables', 'Completed'])]
+
+# Parse dates and remove rows without valid due dates
+df['Due Date'] = pd.to_datetime(df['Due Date'], errors='coerce')
+df = df.dropna(subset=['Due Date'])
+
+# Sort by due date
+df = df.sort_values('Due Date')
+
+# Calculate start dates (3 weeks before due date)
+df['Start Date'] = df['Due Date'] - timedelta(weeks=3)
+
+# Wrap task names for display (wrap at 50 characters)
+def wrap_text(text, width=50):
+    """Wrap text to multiple lines at word boundaries"""
+    return '\n'.join(textwrap.wrap(str(text), width=width))
+
+df['Task Name'] = df['Card Name'].apply(wrap_text)
+
+# Create figure
+fig, ax = plt.subplots(figsize=(14, 8))
+
+# Color mapping
+colors = {
+    'Completed': '#2E7D32',  # Green
+    'Deliverables': '#1976D2'  # Blue
+}
+
+# Plot Gantt bars
+y_pos = np.arange(len(df))
+bar_height = 0.6
+
+for i, (idx, row) in enumerate(df.iterrows()):
+    color = colors[row['List Name']]
+    start_date_num = mdates.date2num(row['Start Date'])
+    end_date_num = mdates.date2num(row['Due Date'])
+    width = end_date_num - start_date_num
+    
+    ax.barh(i, width, left=start_date_num, height=bar_height, 
+            color=color, alpha=0.7, edgecolor='black', linewidth=1)
+
+# Configure y-axis with wrapped labels
+ax.set_yticks(y_pos)
+ax.set_yticklabels(df['Task Name'].values)
+ax.invert_yaxis()  # Top to bottom
+
+# Format y-axis labels for wrapped text
+for label in ax.get_yticklabels():
+    label.set_ha('right')
+    label.set_va('center')
+
+# Format x-axis as dates
+ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+ax.xaxis.set_minor_locator(mdates.WeekdayLocator())
+plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+# Set labels and title
+ax.set_xlabel('Timeline', fontsize=12, fontweight='bold')
+ax.set_title('Project Workplan Gantt Chart', fontsize=16, fontweight='bold', pad=20)
+
+# Add grid
+ax.grid(True, alpha=0.3, linestyle='--', axis='x')
+
+# Add legend
+from matplotlib.patches import Patch
+legend_elements = [
+    Patch(facecolor=colors['Completed'], alpha=0.7, label='Completed'),
+    Patch(facecolor=colors['Deliverables'], alpha=0.7, label='Deliverables')
+]
+ax.legend(handles=legend_elements, loc='upper right', frameon=True, fancybox=True, shadow=True)
+
+# Adjust layout to accommodate wrapped y-axis labels (35% left margin)
+plt.subplots_adjust(left=0.35, bottom=0.1, right=0.95, top=0.95)
+
+plt.show()
+```
+
+---
+
+## References
+
+### Consultation Sources
+
+**Ministry Consultations (2024):**
+
+- **Hydrology (NHS):** Consultation with Tennielle Hendy (chief@nhs.gov.bz)
+- **Tourism:** Consultation with Darcy Correa (darcy.correa@tourism.gov.bz)
+- **Coastal Zone Management (CZMAI):** Consultations with Mrs. Arlene Young (director@coastalzonebelize.org), Mr. Isreal Correa (gismanager@coastalzonebelize.org), and Ms. Chelsea Perrera (coastalplanner@coastalzonebelize.org)
+- **Livestock:** Consultation with William Usher (ceo@belizelivestock.org)
+- **Forestry:** Consultation with Wilfredo Zetina (ZetinaW@gobmail.gov.bz)
+- **Sustainability / Climate Change:** Consultation with Judene Tingling-Linares (coord.pppu@environment.gov.bz)
+
+### Data Sources
+
+- **Belize Data Inventory:** Excel workbook containing comprehensive dataset inventory (Belize Data Inventory.xlsx)
+- **EMDAT (Emergency Events Database):** Historical disaster records (noted as sparse for Belize)
+- **World Bank:** Climate risk data and assessments
+- **Climate Risk Profile:** Assessment of communities' adaptive capacity and adaptation strategies
+
+### Climate Data Sources
+
+- **World Bank Climate Change Knowledge Portal (CCKP):** Climate context information, visualizations, and analyses for Belize. Available at: https://climateknowledgeportal.worldbank.org/country/belize
+- **NOAA ETOPO Global Relief Model:** Topographic elevation data. Available at: https://www.ncei.noaa.gov/products/etopo-global-relief-model
+- **Gridded Population of the World, Version 4 (GPWv4):** Population density data. Available at: https://cmr.earthdata.nasa.gov/search/concepts/C1597159135-SEDAC.html
+
+### Forecast Products
+
+- **National Meteorological Agency (NMA), Belize:** Seasonal forecasts, agricultural forecasts, and Common Alerting Protocol (CAP) implementation
+
+### Desk Review Notes
+
+- Consultation notes and findings compiled during the desk review process (Belize desk review notes.txt)
+
+### Climate Risk Analysis Plan Sources
+
+**Citations from Section 1 (Executive Summary):**
+
+1. Climate Risk Profile: Belize - International Institute for Sustainable Development, accessed December 15, 2025, https://www.iisd.org/system/files/2025-04/belize-climate-risk-profile.pdf
+
+2. Belize Bolsters Climate and Disaster Resilience with the World Bank's Support, accessed December 15, 2025, https://www.worldbank.org/en/news/press-release/2025/07/29/belize-bolsters-climate-and-disaster-resilience-with-the-world-bank-s-support
+

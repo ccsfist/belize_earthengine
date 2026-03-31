@@ -1,0 +1,569 @@
+
+// load libraries
+
+var rainfallFunctions = require('users/maxmauerman/belize_nms:1_HazardMetrics/RainfallFunctions') ;
+var temperatureFunctions = require('users/maxmauerman/belize_nms:1_HazardMetrics/TemperatureFunctions') ;
+var statsFunctions = require('users/maxmauerman/belize_nms:2_Statistics/StatsFunctions') ;
+var projectionFunctions = require('users/maxmauerman/belize_nms:2_Statistics/ProjectionFunctions') ;
+var arealFunctions = require('users/maxmauerman/belize_nms:3_ArealSummary/SpatialAvgFunctions') ;
+
+
+
+// 0. define global params:
+
+var year_start = 2000 ;
+var year_end = 2022 ;
+
+/// admin area dataset
+
+var muni = ee.FeatureCollection('WM/geoLab/geoBoundaries/600/ADM2').filter(ee.Filter.eq("shapeGroup","BLZ")) ;
+
+/// hazard datasets
+
+var gfd = ee.ImageCollection('GLOBAL_FLOOD_DB/MODIS_EVENTS/V1')
+  .filterBounds(muni);
+
+var dataset = 'CHIRPS' ;
+
+/////
+
+// 1. hazard metrics
+
+  var rainDekadal = rainfallFunctions.rainfallIntervalSum(dataset,10,'day',year_start,year_end,false)  ;
+  var rainDaily = rainfallFunctions.rainfallIntervalSum(dataset,11,'day',year_start,year_end,false)  ;
+  var rainTot = rainfallFunctions.seasonalTotal(rainDekadal,152,90,year_start,year_end) ;
+
+  /// average rainfall 
+  
+  var rainClim = rainfallFunctions.climatology(dataset,10,'day',year_start,year_end) ;
+  var rainClimTot = rainfallFunctions.seasonalTotal(rainDekadal,121,274,year_start,year_end).mean()
+
+  // maximum 1-day rainfall
+  
+  var rainMax = rainfallFunctions.seasonalMax(rainDaily,150,180,year_start,year_end) ;
+
+  // % days above threshold 
+  
+  var wetDays = rainfallFunctions.seasonalWetDays(dataset,100,150,180,year_start,year_end) ;
+
+  // length of rainy spell
+  
+  var wetSpells = rainfallFunctions.rainySpell(dataset,150,180,40,year_start,year_end)
+
+ // forecast
+  
+  /// first, convert to imageCollection
+
+  var forecast_raw = ee.Image("projects/ee-maxmauerman/assets/belize_forecast_mu_mar") ;
+  var bands = forecast_raw.bandNames() ;
+  var list = bands.map(function(n) { return forecast_raw.select([n]) }) ;
+  var collection = ee.ImageCollection.fromImages(list) ;
+  
+  /// then assign time index
+  
+  var timeList = ee.List.sequence(1993,2022) ;
+  
+  var forecast = collection.map(function(img) {
+    var index = ee.Number.parse(img.get('system:index')) ;
+    var selectYear = timeList.get(index) ;
+    var imgFormatted = img.rename(['precip']).divide(30).set('year',ee.Number(selectYear)) ;
+    
+    return imgFormatted ;
+    
+  }).filter(ee.Filter.gte('year',year_start))
+    .filter(ee.Filter.lte('year',year_end));
+
+// 2. impact metrics
+
+var adm1 = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level1")
+      .filter(ee.Filter.eq("ADM0_NAME","Belize"));
+      
+  // expert bad year data
+
+var expertYears = ee.FeatureCollection("projects/ee-maxmauerman/assets/expert_bad_years_belize")
+  .filter(ee.Filter.eq('hazard_name',"Flood / Excess Rainfall")) ;
+  
+
+// 3. visualize
+  
+  /// UI elements - don't need to change this other than label text and chart names
+  
+  Map.add(ui.Label(
+    'Ground-truth Analysis - Flood & Excess', {fontWeight: 'bold', fontSize: '24px'})); // update as needed
+  Map.add(ui.Label('Click on admin areas for history of climate hazard and impact. See *Layers* for map overlays.')) ;
+  
+  var HIGHLIGHT_STYLE = {color: '8856a7', fillColor: '8856a700', width: 4};
+  
+  var resultsPanel = ui.Panel({style: {position: 'bottom-right'}});
+  Map.add(resultsPanel);
+  
+  var resultsPanel2 = ui.Panel({style: {position: 'bottom-left',width:'500px'}});
+  Map.add(resultsPanel2);
+  
+  //var resultsPanel3 = ui.Panel({style: {position: 'bottom-center',width:'400px'}});
+  //Map.add(resultsPanel3);
+  
+  var buttonPanel = ui.Panel(
+    [ui.Button('Clear results', clearResults)],
+    ui.Panel.Layout.Flow('horizontal'), {margin: '0 0 0 auto', width: '500px'});
+  
+  var selectedPoints = [] ;
+  Map.style().set({cursor: 'crosshair'});
+  
+  function clearResults() {
+    var n_layers = Map.layers().length() -1 ;
+    selectedPoints = [];
+    Map.layers().remove(Map.layers().get(n_layers)); 
+      var instructionsLabel = ui.Label('Select regions to compare historical impacts.'); // update as needed
+      resultsPanel.widgets().reset([instructionsLabel]);
+      resultsPanel2.widgets().reset() ;
+      //resultsPanel3.widgets().reset() ;
+     Map.addLayer(muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)).style(HIGHLIGHT_STYLE));
+  }
+  
+  function handleMapClick(location) {
+    selectedPoints.push([location.lon, location.lat]);
+    updateChart();
+  }
+  Map.onClick(handleMapClick);
+
+  function updateOverlay() {
+    var n_layers = Map.layers().length() -1 ;
+    var overlay = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)).style(HIGHLIGHT_STYLE);
+    Map.layers().set(n_layers, ui.Map.Layer(overlay));
+  }
+
+  function updateChart() {
+    var chart = emdatChart(); // update these if you want to view different charts than the below
+    var chart2 = hazardChart() ;
+    var chart3 = climChart() ;
+    var chart4 = climPctilesChart() ;
+    var chart5 = hazardChart2() ;
+    var chart6 = forecastChart() ;
+    var chart7 = expertChart() ;
+    var chart8 = climChartBadYears() ;
+    updateOverlay();
+    resultsPanel.clear().add(chart7).add(chart5).add(buttonPanel);
+    resultsPanel2.clear().add(chart3).add(chart8)
+    //resultsPanel3.clear().add(chart2).add(chart7)
+  }
+  
+  
+  /// chart functions
+  
+ function emdatChart() {
+    
+    var study_area = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+    var gaul_adm1 = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level1")
+      .filter(ee.Filter.eq("ADM0_NAME","Belize"));
+    var gaul_adm2 = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level2")
+     .filter(ee.Filter.eq("ADM0_NAME","Belize"));
+    
+    var emdat = ee.FeatureCollection("projects/sat-io/open-datasets/gdis_1960-2018")
+      .filter(ee.Filter.eq('country','Belize')) ; // change as needed
+    
+    var emdat_coded = emdat.map(function(feat) {
+      
+      var yearString = feat.getString('year') ;
+      var levelString = feat.getString('level') ;
+      
+      var yearVal = ee.Number.parse(yearString) ;
+      var levelVal = ee.Number.parse(levelString) ;
+      
+      return feat.set('year',yearVal).set('level',levelVal)
+      
+    }) ;
+    
+    var emdat_adm1 = emdat_coded.filter(ee.Filter.eq('level',1)) ;
+    var emdat_adm2 = emdat_coded.filter(ee.Filter.eq('level',2)) ;
+    var emdat_adm3 = emdat_coded.filter(ee.Filter.eq('level',3)) ;
+    
+    var adm1_clicked = gaul_adm1.map(function(feat){
+      return feat.set('selected',feat.intersects(study_area.geometry(),1000)) ;
+    }).filter(ee.Filter.eq('selected',true)) ;
+    
+    var adm2_clicked = gaul_adm2.map(function(feat){
+      return feat.set('selected',feat.intersects(study_area.geometry(),1000)) ;
+    }).filter(ee.Filter.eq('selected',true)) ;
+    
+    var emdat_adm1_selected = emdat_adm1.map(function(feat){
+      return feat.set('selected',feat.intersects(adm1_clicked.geometry(),1000)) ;
+    }).filter(ee.Filter.eq('selected',true)) ;
+
+    var emdat_adm2_selected = emdat_adm2.map(function(feat){
+      return feat.set('selected',feat.intersects(adm2_clicked.geometry(),1000)) ;
+    }).filter(ee.Filter.eq('selected',true)) ;
+
+    var emdat_adm3_selected = emdat_adm3.map(function(feat){
+      return feat.set('selected',feat.intersects(adm2_clicked.geometry(),1000)) ;
+    }).filter(ee.Filter.eq('selected',true)) ;
+
+    var emdat_all = emdat_adm3_selected
+      .merge(emdat_adm2_selected)
+      .merge(emdat_adm1_selected) ;
+    
+    var chart = ui.Chart.feature
+      .groups({
+        features: emdat_all.filter(ee.Filter.gte('year',year_start)).filter(ee.Filter.lte('year',year_end)),
+        xProperty: 'year',
+        yProperty: 'level',
+        seriesProperty: 'disasterty'
+      })
+      .setChartType('ScatterChart')
+      .setOptions({
+        title: "EMDAT disaster events",
+       hAxis:{
+        title: 'Year',
+        viewWindow: {min:year_start,max:year_end}
+      }  
+      }) ;
+    return chart ;
+    
+  }
+  
+  function hazardChart() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+    var startDate = ee.Date.fromYMD(year_start+1,1,1);
+    var endDate = ee.Date.fromYMD(year_end+1,1,1) ;
+    var secondDate = startDate.advance(1, 'year').millis();
+    var increase = secondDate.subtract(startDate.millis());
+    var interval_list = ee.List.sequence(startDate.millis(), endDate.millis(), increase) ;
+    
+   var chart = ui.Chart.image.seriesByRegion({
+      imageCollection: gfd.select('flooded'), 
+      regions: selectedMuni, 
+      reducer: ee.Reducer.mean(), 
+      scale: 10000,
+      xProperty: 'system:time_start',
+      seriesProperty: 'shapeName'
+    }).setOptions({
+      lineWidth: 0,
+      pointSize: 5,
+      title: 'Fractional Flooded Area',
+      vAxis: {title: '% flooded'},
+      hAxis: {title: 'Year', ticks: interval_list.getInfo()}
+    }) ;
+    
+    return chart ;
+    
+  }
+
+  function hazardChart2() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+    var startDate = ee.Date.fromYMD(year_start+1,1,1);
+    var endDate = ee.Date.fromYMD(year_end+1,1,1) ;
+    var secondDate = startDate.advance(1, 'year').millis();
+    var increase = secondDate.subtract(startDate.millis());
+    var interval_list = ee.List.sequence(startDate.millis(), endDate.millis(), increase) ;
+    
+   var chart = ui.Chart.image.seriesByRegion({
+      imageCollection: wetSpells.select(['wetRunLength']), 
+      regions: selectedMuni, 
+      reducer: ee.Reducer.mean(), 
+      scale: 10000,
+      xProperty: 'year',
+      seriesProperty: 'shapeName'
+    }).setOptions({
+      lineWidth: 0,
+      pointSize: 5,
+      title: 'Longest rainy spell',
+      vAxis: {title: '# days above 40mm'},
+      hAxis: {title: 'Year'}
+    }) ;
+    
+    return chart ;
+    
+  }
+
+function forecastChart() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+    var startDate = ee.Date.fromYMD(year_start+1,1,1);
+    var endDate = ee.Date.fromYMD(year_end+1,1,1) ;
+    var secondDate = startDate.advance(1, 'year').millis();
+    var increase = secondDate.subtract(startDate.millis());
+    var interval_list = ee.List.sequence(startDate.millis(), endDate.millis(), increase) ;
+    
+   var chart = ui.Chart.image.seriesByRegion({
+      imageCollection: forecast, 
+      regions: selectedMuni, 
+      reducer: ee.Reducer.mean(), 
+      scale: 10000,
+      xProperty: 'year',
+      seriesProperty: 'shapeName'
+    }).setOptions({
+      lineWidth: 0,
+      pointSize: 5,
+      title: 'Forecasted JJA rainfall',
+      vAxis: {title: 'total mm'},
+      hAxis: {title: 'Year'}
+    }) ;
+    
+    return chart ;
+    
+  }
+  
+function expertChart() {
+   
+  var chart = ui.Chart.feature
+      .groups({
+        features: expertYears,
+        xProperty: 'year',
+        yProperty: 'rank_avg',
+        seriesProperty:'district'
+      })
+      .setChartType('ScatterChart')
+      .setOptions({
+        title: "Expert bad years",
+       hAxis:{
+        title: 'Year',
+        viewWindow: {min:year_start,max:year_end}
+      },vAxis:{
+        title: 'Rank (lower=worse)',
+        },
+      }) ;
+    return chart ;
+  
+  }
+
+  function climChart() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+    var chart = ui.Chart.image.seriesByRegion({
+      imageCollection: rainClim.select('precipitation_sum'), 
+      regions: selectedMuni, 
+      reducer: ee.Reducer.mean(), 
+      scale: 10000,
+      xProperty: 'day_of_year',
+      seriesProperty: 'shapeName'
+    }).setOptions({
+      title: 'Average rainfall',
+      vAxis: {title: '10-day mm'},
+      hAxis: {title: 'Day of year'}
+    }) ;
+    
+    return chart ;
+
+  }
+
+ function climVarChart() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+    var chart = ui.Chart.image.seriesByRegion({
+      imageCollection: rainClim.select('precipitation_sum_stdDev'), 
+      regions: selectedMuni, 
+      reducer: ee.Reducer.mean(), 
+      scale: 10000,
+      xProperty: 'day_of_year',
+      seriesProperty: 'shapeName'
+    }).setOptions({
+      title: 'Variance in rainfall',
+      vAxis: {title: '10-day mm'},
+      hAxis: {title: 'Day of year'}
+    }) ;
+    
+    return chart ;
+
+  }
+
+  function climChartBadYears() {
+      
+      var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+      
+      var years_toselect = expertYears
+        .filter(ee.Filter.lte('rank_avg',5))
+        .aggregate_array('year')
+        .distinct() ;
+      
+      var chart = ui.Chart.image.doySeriesByYear({
+        imageCollection: rainDekadal.filter(ee.Filter.inList('year',years_toselect)), 
+        bandName: 'precipitation_sum',
+        region: selectedMuni, 
+        regionReducer: ee.Reducer.mean(), 
+        scale: 10000
+      }).setOptions({
+        title: 'Rainfall in bad years',
+        vAxis: {title: '10-day mm'},
+        hAxis: {title: 'Day of year'}
+      }) ;
+      
+      return chart ;
+  
+    }
+
+   function climPctilesChart() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+    var percentilesAll = rainMax.reduce(ee.Reducer.percentile(ee.List.sequence(10,100,10))) ;
+    
+    var bands = percentilesAll.bandNames()
+    var list = bands.map(function(n) { return percentilesAll.select([n]) })
+    var percentilesAll = ee.ImageCollection.fromImages(list).map(function(n){
+      var index = n.get('system:index')
+      return n.set('index_num',ee.Number(index))
+    }) ;
+    
+    
+    var chart =  ui.Chart.image.series({
+        imageCollection: percentilesAll, 
+        region: selectedMuni, 
+        scale: 10000,
+        reducer: ee.Reducer.mean(),
+        xProperty:'index_num'
+      })
+      .setOptions({
+        title:'Climatological Percentiles of Total Rainfall',
+          lineWidth: 5,
+      })
+    
+    return chart ;
+
+  }
+
+  // Creates a color bar thumbnail image for use in legend from the given color
+  // palette.
+  
+
+  /// add layers to map
+
+  /// elevation base layer
+  
+  var elevation = ee.Image('USGS/SRTMGL1_003').select('elevation');
+  var slope = ee.Terrain.slope(elevation).clip(muni) ;
+
+  Map.addLayer(slope, {min: 0, max: 60}, 'Elevation gradient');
+
+  /// hazard  
+  
+  var durationPalette = ['c3effe', '1341e8', '051cb0', '001133'];
+    
+  var gfdFloodedSum = gfd.select('flooded').sum();
+  Map.addLayer(
+    gfdFloodedSum.selfMask().clip(muni),
+    {min: 0, max: 10, palette: durationPalette},
+    'GFD Satellite Observed Flood Plain');
+  
+  var permWater = gfd.select('jrc_perm_water').sum().gte(1);
+  Map.addLayer(
+    permWater.selfMask().clip(muni),
+    {min: 0, max: 1, palette: 'C3EFFE'},
+    'JRC Permanent Water');
+
+  var rainTotVis = {
+    min: 400,
+    max: 2000,
+    palette: ['001137', '0aab1e', 'e7eb05', 'ff4a2d', 'e90000'],
+  };
+
+  Map.addLayer(rainClimTot.clip(muni),rainTotVis,"Average total rainfall",false) ;
+
+
+/// exposure 
+  
+  
+  var landcover = ee.Image('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019')
+  .select('discrete_classification').clip(muni);
+  
+  Map.addLayer(landcover, {}, 'Land Cover',false);
+  
+  /// urban
+  
+  var urban = landcover.updateMask(landcover.eq(50)).focalMean({
+    radius:2000,units:'meters'}).toByte()
+    .reduceToVectors({
+    geometry: muni,
+    scale: 1000,
+    tileScale: 2
+  }).geometry() ;
+  Map.addLayer(urban, {color:'red'}, 'Urban Area',false);
+  
+  
+  /// agricultural
+  
+  var ag = landcover.updateMask(landcover.eq(40)).focalMean({
+    radius:2000,units:'meters'}).toByte()
+    .reduceToVectors({
+    geometry: muni,
+    scale: 1000,
+    tileScale: 2
+  }).geometry().difference(urban,1) ;
+  
+  Map.addLayer(ag, {color:"green"}, 'Cultivated Area',false);
+
+/// vulnerability 
+
+  // global human modification
+  
+  var ghm = ee.ImageCollection('CSP/HM/GlobalHumanModification');
+
+  var ghmVisualization = {
+    bands: ['gHM'],
+    min: 0.0,
+    max: 1.0,
+    palette: ['0c0c0c', '071aff', 'ff0000', 'ffbd03', 'fbff05', 'fffdfd']
+  };
+  
+  Map.addLayer(arealFunctions.clipToAdmin(ghm,muni,false), ghmVisualization, 'Human modification',false);
+    
+  // protected areas
+  
+  var protected_area = ee.FeatureCollection('WCMC/WDPA/current/polygons');
+  var protectedVis = {
+    palette: ['2ed033', '5aff05', '67b9ff', '5844ff', '0a7618', '2c05ff'],
+    min: 0.0,
+    max: 1550000.0,
+    opacity: 0.8,
+  };
+  var protectedImg = ee.Image().float().paint(protected_area, 'REP_AREA');
+  Map.setCenter(41.104, -17.724, 6);
+  Map.addLayer(protectedImg.clip(muni), protectedVis, 'Protected areas',false);
+  
+  // forest cover change
+  
+  var forest2015 = ee.ImageCollection('NASA/MEASURES/GFCC/TC/v3')
+                  .filter(ee.Filter.date('2015-01-01', '2015-12-31'))
+                  .select('tree_canopy_cover')
+                  .mean();
+  var forest2000 = ee.ImageCollection('NASA/MEASURES/GFCC/TC/v3')
+                  .filter(ee.Filter.date('2000-01-01', '2000-12-31'))
+                  .select('tree_canopy_cover')
+                  .mean();              
+  
+  var forestDiff = forest2015.subtract(forest2000) ;
+  
+  var forestDiffPal = {
+    min: -100,
+    max: 100,
+    palette: [
+    'B78200','FFFFFF','0027FF'
+    ],
+  };
+
+  Map.addLayer(forestDiff.clip(muni), forestDiffPal, 'Change in forest cover 2000-2015',false);
+
+
+
+  // admin areas
+  
+  var empty = ee.Image().byte();
+  var outline = empty.paint({
+    featureCollection: muni, 
+    color: 1,
+    width: 1
+  });
+  Map.addLayer(outline, {palette: 'FFFFFF'}, 'Admin areas') ;
+  Map.centerObject(muni, 8) ;
+  Map.setOptions('SATELLITE');
+    
+  // utility layer to keep things in the right order
+  
+  Map.addLayer(muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)).style(HIGHLIGHT_STYLE));

@@ -1,0 +1,231 @@
+
+// define temperature dataset options for subsequent functions
+
+var temperatureDatasets = {
+  "ERA5": ee.ImageCollection("ECMWF/ERA5/DAILY").select('mean_2m_air_temperature'),
+  "GLDAS": ee.ImageCollection("NASA/GLDAS/V021/NOAH/G025/T3H").select('Tair_f_inst'),
+  "ERA5_LAND": ee.ImageCollection("ECMWF/ERA5_LAND/DAILY_AGGR").select('temperature_2m_max') // up to date version of ERA5
+} ;
+
+
+// Create average of temperature over defined interval (e.g. 10 days)
+
+var tempIntervalAvg = function(dataset,interval,increment,year_start,year_end) {
+  
+  // dataset: string; satellite to use ["ERA5", "GLDAS","ERA5_LAND"]
+  // interval: integer; number of [increment] to advance by
+  // increment: string; unit of time ['day','week','month']
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+
+  var rawData = temperatureDatasets[dataset] ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  var start = '2018-01-01';
+  var startDate = ee.Date(start);
+  var secondDate = startDate.advance(interval, increment).millis();
+  var increase = secondDate.subtract(startDate.millis());
+  var interval_list = ee.List.sequence(startDate.millis(), ee.Date('2019-01-01').millis(), increase);
+
+  var byInterval = ee.ImageCollection(
+    ee.FeatureCollection(years_list.map(function (y) {
+        var yearCollection = rawData.filter(ee.Filter.calendarRange(y, y, 'year'));
+          var byYear = ee.ImageCollection.fromImages(
+            interval_list.map(function (inv) {
+              var averagedImage = yearCollection.filter(ee.Filter.calendarRange
+                (ee.Date(inv).getRelative('day','year'), 
+                 ee.Date(inv).advance(interval, increment).getRelative('day','year'))
+                  )
+                .reduce(ee.Reducer.mean())
+                .subtract(273.15);
+              
+              var doy = ee.Date(inv).getRelative('day','year').add(ee.Number(1)) ;
+              var moy = ee.Date(inv).getRelative('month','year').add(ee.Number(1)) ; 
+              var dom = ee.Date(inv).getRelative('day','month').add(ee.Number(1)) ;
+              
+              return averagedImage
+                .set('day_of_year', doy)
+                .set('year',y)
+                .set('system:time_start', ee.Date.fromYMD(y, moy, dom).millis()) ;
+            }));
+      return byYear;
+    }))
+  .flatten());
+    
+  return byInterval ;   
+  
+} ;
+
+
+// # of days over threshold
+
+var seasonalHeatDays = function(dataset,threshold,seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  // dataset: string; satellite to use ["ERA5", "GLDAS","ERA5_LAND"]
+  // threshold: integer; threshold of hot day in degrees C 
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: integer; number of days that the agricultural year lasts
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  var rawData = temperatureDatasets[dataset] ;
+
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var totalSeasonDays = ee.Number(seasonLength) ; 
+  
+  var bySeason = ee.ImageCollection(
+  years_list.map(function(year) {
+    
+    var firstDoy = ee.Date.fromYMD(year,1,1) ;
+    var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+    var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+    
+    var oneYear = rawData
+      .filterDate(startDate,endDate) 
+      .map(function(image) {
+        var imageRescaled = image.subtract(273.15) ;
+        var baseline = ee.Image(0) ;
+        var replacement = ee.Image(1) ;
+        var timestamp = image.get('system:time_start') ;
+        return baseline.where(imageRescaled.gt(threshold),replacement).set('system:time_start',timestamp) ;
+      })
+      .sum()
+      .divide(totalSeasonDays)
+      .rename('hotDays'); 
+    return oneYear.set('year', ee.String(year)) ;
+  })) ;
+  
+  return bySeason ; 
+  
+} ;
+
+var hotSpell = function(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end) {
+  
+  // dataset: string; satellite to use ["ERA5", "GLDAS","ERA5_LAND"]
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: integer; number of days that the agricultural year lasts
+  // threshold: daily temp threshold for defining a "hot day" 
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  
+  var rawData = temperatureDatasets[dataset] ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var runDateCollection = ee.ImageCollection(years_list.map(function (y) {
+        
+      var firstDoy = ee.Date.fromYMD(y,1,1) ;
+      var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+      var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+        
+      var collection = rawData
+        .filterDate(startDate,endDate)
+        .map(function(img){
+          var imgRescaled = img.subtract(273.15) ;
+          var zero = ee.Image(0) ;
+          var one = ee.Image(1) ;
+          return one.where(imgRescaled.lt(threshold),zero) ; 
+        }) ;
+        
+      // hot spell analysis 
+      
+      //----------------------------------------------------------------
+      
+      // We're only working with a single axis: #0
+      var axis = 0;
+      
+      // computes the foward difference of an array image.
+      var forwardDifference = function(image) {
+        var left = image.arraySlice(0, 0, -1)
+        var right = image.arraySlice(0, 1)
+        return left.subtract(right)
+      } ;
+      
+      // Convert to a 2D array-valued image and flatten to 1D using arrayReshape().
+      var precipitation = collection.toArray() ;
+      precipitation = precipitation.arrayReshape(precipitation.arrayLength(0).toArray(), 1) ;
+      
+      // Compute the forward difference
+      var difference = forwardDifference(precipitation);
+      var ones = ee.Image(ee.Array([1]))
+      difference = ones.addBands(difference).toArray(0); // Prepend a 1 to the differences.
+      
+      // Make an index array sized for the length of the data in each pixel.
+      var maxSize = collection.size()
+      var indexes = ee.Image.constant(ee.Array(ee.List.sequence(0, maxSize)));
+      indexes = indexes.arraySlice(axis, 0, precipitation.arrayLength(0));
+      
+      var runStarts = indexes.arrayMask(difference.neq(0))
+      var runValues = precipitation.arrayMask(difference.neq(0))
+      // Append an extra index to mark the end of the last run.
+      var runLengths = runStarts.addBands(precipitation.arrayLengths()).toArray(0)
+      var runLengths = forwardDifference(runLengths.multiply(-1))
+            
+      // hot spells
+      
+      var hotRunStarts = runStarts.arrayMask(runValues.gt(0))
+      var hotRunLengths = runLengths.arrayMask(runValues.gt(0))
+      
+      var hottestIndex = hotRunLengths.arrayArgmax().arrayGet(0)
+      
+      var noRuns = ee.Image(0).updateMask(hottestIndex)
+      
+      var hotRunDate = noRuns.unmask(hotRunStarts.arrayGet(hottestIndex))
+      var hotRunLength = noRuns.unmask(hotRunLengths.arrayGet(hottestIndex))
+      
+      return ee.Image([hotRunDate,hotRunLength])
+      .rename(['hotRunDate','hotRunLength']).set('year',y) ;
+      
+  })) ; 
+  
+  return runDateCollection ; 
+}
+
+
+
+// Calculate climatology (average conditions per period of the year)
+
+var climatology = function(dataset,interval,increment,year_start,year_end) {
+
+  // dataset: string; satellite to use ["ERA5"]
+  // increment: string; unit of time ['day','week','month']
+  // interval: integer; number of [increment] to advance by
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+
+  var rawData = temperatureDatasets[dataset].filter(ee.Filter.calendarRange(year_start,year_end,'year')) ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  var start = '2018-01-01';
+  var startDate = ee.Date(start);
+  var secondDate = startDate.advance(interval, increment).millis();
+  var increase = secondDate.subtract(startDate.millis());
+  var interval_list = ee.List.sequence(startDate.millis(), ee.Date('2019-01-01').millis(), increase);
+  
+  var means = ee.ImageCollection(interval_list
+    .map(function(date) {
+      return rawData.filter(ee.Filter.calendarRange
+      (ee.Date(date).getRelative('day','year'), 
+      ee.Date(date).advance(interval, increment).getRelative('day','year')))
+          .mean()
+          .subtract(273.15)
+          .set('day_of_year', ee.Date(date).getRelative('day','year').add(ee.Number(1)) );
+  }));
+  
+  var std_devs = ee.ImageCollection(interval_list
+    .map(function(date) {
+      return rawData.filter(ee.Filter.calendarRange
+      (ee.Date(date).getRelative('day','year'), 
+      ee.Date(date).advance(interval, increment).getRelative('day','year')))
+          .reduce(ee.Reducer.stdDev())
+          .set('day_of_year', ee.Date(date).getRelative('day','year').add(ee.Number(1)) );
+  }));
+  
+  
+  return means.combine(std_devs) ;
+  
+} ;
+
+exports.tempIntervalAvg = tempIntervalAvg ; 
+exports.seasonalHeatDays = seasonalHeatDays ; 
+exports.climatology = climatology ;
+exports.hotSpell = hotSpell ;

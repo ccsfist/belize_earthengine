@@ -8,6 +8,8 @@ In this section, we will show you how to change the shapefiles in the maptool to
 
 First, you must upload the shapefile as an Earth Engine asset, as pictured above. Be sure to include all of the accompanying files that it asks for.
 
+Example shapefile to use: https://data.humdata.org/dataset/unep_wdpca_blz 
+
 # Change Global Parameters
 
 Before:

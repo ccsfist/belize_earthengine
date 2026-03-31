@@ -1,0 +1,973 @@
+
+// define rainfall dataset options for subsequent functions
+
+var rainfallDatasets = {
+  'CHIRPS':ee.ImageCollection("UCSB-CHC/CHIRPS/V3/DAILY_SAT").select('precipitation'),
+  'GPM':ee.ImageCollection("JAXA/GPM_L3/GSMaP/v6/operational").select(['hourlyPrecipRateGC'],['precipitation']),
+  'CEMS':ee.ImageCollection("projects/climate-engine-pro/assets/ce-cems-fire-daily-4-1").select(['fire_weather_index'],['precipitation']) // fire danger index
+
+} ;
+
+// Create sum of rainfall over defined interval (e.g. 10 days, 2 months)
+
+var rainfallIntervalSum = function(dataset,interval,increment,year_start,year_end,include_cap,cap_value) {
+  
+  // dataset: string; satellite to use ["CHIRPS","GPM"]
+  // interval: integer; number of [increment] to advance by
+  // increment: string; unit of time ['day','week','month']
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  // include_cap: boolean; whether to clean data of extreme high values before summing (useful for drought)
+  // cap_value: integer; cap amount in cumulative mm of rainfall IF include_cap = TRUE
+
+  var rawData = rainfallDatasets[dataset] ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  var start = '2018-01-01';
+  var startDate = ee.Date(start);
+  var secondDate = startDate.advance(interval, increment).millis();
+  var increase = secondDate.subtract(startDate.millis());
+  var interval_list = ee.List.sequence(startDate.millis(), ee.Date('2019-01-01').millis(), increase);
+
+  if (include_cap === true) {
+      rawData = rawData.map(function(image) {
+        var replacement = ee.Image(cap_value) ;
+        return image.where(image.gt(cap_value),replacement) ;
+      }) ;
+    } 
+
+  var byInterval = ee.ImageCollection(
+    ee.FeatureCollection(years_list.map(function (y) {
+        var yearCollection = rawData.filter(ee.Filter.calendarRange(y, y, 'year'));
+          var byYear = ee.ImageCollection.fromImages(
+            interval_list.map(function (inv) {
+              var summedImage = yearCollection.filter(ee.Filter.calendarRange
+                (ee.Date(inv).getRelative('day','year'), 
+                 ee.Date(inv).advance(interval, increment).getRelative('day','year'))
+                  )
+                .reduce(ee.Reducer.sum());
+              
+              var doy = ee.Date(inv).getRelative('day','year').add(ee.Number(1)) ;
+              var moy = ee.Date(inv).getRelative('month','year').add(ee.Number(1)) ; 
+              var dom = ee.Date(inv).getRelative('day','month').add(ee.Number(1)) ;
+              
+              return summedImage
+                .set('day_of_year', doy)
+                .set('year',y)
+                .set('system:time_start', ee.Date.fromYMD(y, moy, dom).millis()) ;
+            }));
+      return byYear;
+    }))
+  .flatten());
+    
+  return byInterval ;   
+  
+} ;
+
+
+// Start of season - first day of year in which cumulative rainfall exceeds some threshold
+
+var onsetDate = function(intervalDataset,onsetThreshold,seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  // intervalDataset: output from rainfallIntervalSum
+  // onsetThreshold: integer; amount of cumulative rainfall in mm which defines start of season
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: integer; number of days that the agricultural year lasts
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var onsetDataset = ee.ImageCollection(years_list.map(function (y) {
+      
+      var firstDoy = ee.Date.fromYMD(y,1,1) ;
+      var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+      var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+      
+      var yearCollection = intervalDataset
+          .filterDate(startDate,endDate) 
+          .map(function(image) {
+            
+            var onset_doy = image
+              .getNumber('day_of_year');
+            
+            var onset_image = ee.Image(onset_doy) ;
+            
+            var onset_image_agyear = onset_image
+            .where(onset_image.lt(seasonStartDoy),onset_image.add(ee.Number(seasonLength))) ;
+              
+            var image_output = image
+              .addBands(onset_image_agyear
+              .rename('onset_date')
+              .toFloat()) ;
+              
+              
+            var image_filtered_output = image_output.updateMask(
+                  image.select('precipitation_sum').gt(onsetThreshold)
+                ) ;
+              
+              return(image_filtered_output) ;
+              
+          })
+          .select(['onset_date'])
+          .reduce(ee.Reducer.min())
+          .rename(['onset_date'])
+          .set('year',y) ;
+          
+    return yearCollection;
+  })) ; 
+
+  return onsetDataset ; 
+    
+} ;
+
+
+// End of season - last day of year in which cumulative rainfall exceeds some threshold
+
+var cessationDate = function(intervalDataset,cessationThreshold,seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  // intervalDataset: output from rainfallIntervalSum
+  // cessationThreshold: integer; amount of cumulative rainfall in mm which defines end of season
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year 
+  // seasonLength: integer; number of days that the agricultural year lasts
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var cessationDataset = ee.ImageCollection(years_list.map(function (y) {
+      
+      var firstDoy = ee.Date.fromYMD(y,1,1) ;
+      var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+      var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+      
+      var yearCollection = intervalDataset
+          .filterDate(startDate,endDate) 
+          .map(function(image) {
+            
+            var cessation_doy = image
+              .getNumber('day_of_year');
+            
+            var cessation_image = ee.Image(cessation_doy) ;
+            
+            var cessation_image_agyear = cessation_image
+            .where(cessation_image.lt(seasonStartDoy),cessation_image.add(ee.Number(seasonLength))) ;
+              
+            var image_output = image
+              .addBands(cessation_image_agyear
+              .rename('cessation_date')
+              .toFloat()) ;
+              
+              
+            var image_filtered_output = image_output.updateMask(
+                  image.select('precipitation_sum').gt(cessationThreshold)
+                ) ;
+              
+              return(image_filtered_output) ;
+              
+          })
+          .select(['cessation_date'])
+          .reduce(ee.Reducer.max())
+          .rename(['cessation_date'])
+          .set('year',y) ;
+          
+    return yearCollection;
+  })) ; 
+
+  return cessationDataset ; 
+    
+    
+} ;
+
+// Calculate standardized precipitation index over rolling window
+
+var spi = function(dataset,interval,increment,year_start,year_end,windowWidth) {
+
+  // dataset: string; satellite to use ["CHIRPS","GPM"]
+  // increment: string; unit of time ['day','week','month']
+  // interval: integer; number of [increment] to advance by
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  // windowWidth: integer; number of [increment] before and after each observation to compute SPI
+    
+  var rawData = rainfallDatasets[dataset] ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  var start = '2018-01-01';
+  var startDate = ee.Date(start);
+  var secondDate = startDate.advance(interval, increment).millis();
+  var increase = secondDate.subtract(startDate.millis());
+  var interval_list = ee.List.sequence(startDate.millis(), ee.Date('2019-01-01').millis(), increase);
+ 
+  var byInterval = ee.ImageCollection(
+    ee.FeatureCollection(years_list.map(function (y) {
+        var yearCollection = rawData.filter(ee.Filter.calendarRange(y, y, 'year'));
+          var byYear = ee.ImageCollection.fromImages(
+            interval_list.map(function (inv) {
+              var summedImage = yearCollection.filter(ee.Filter.calendarRange
+                (ee.Date(inv).getRelative('day','year'), 
+                 ee.Date(inv).advance(interval, increment).getRelative('day','year'))
+                  )
+                .reduce(ee.Reducer.sum());
+              
+              var doy = ee.Date(inv).getRelative('day','year').add(ee.Number(1)) ;
+              var moy = ee.Date(inv).getRelative('month','year').add(ee.Number(1)) ; 
+              var dom = ee.Date(inv).getRelative('day','month').add(ee.Number(1)) ;
+              
+              return summedImage
+                .set('day_of_year', doy)
+                .set('year',y)
+                .set('system:time_start', ee.Date.fromYMD(y, moy, dom).millis()) ;
+            }));
+      return byYear;
+    }))
+  .flatten()); 
+  
+  var means = ee.ImageCollection(interval_list
+    .map(function(date) {
+      return byInterval.filter(ee.Filter.calendarRange
+      (ee.Date(date).advance(-1*windowWidth,increment).getRelative('day','year'), 
+      ee.Date(date).advance(windowWidth, increment).getRelative('day','year')))
+          .mean()
+          .set('day_of_year', ee.Date(date).getRelative('day','year').add(ee.Number(1)) );
+  }));
+  
+  var std_devs = ee.ImageCollection(interval_list
+    .map(function(date) {
+      return byInterval.filter(ee.Filter.calendarRange
+      (ee.Date(date).advance(-1*windowWidth,increment).getRelative('day','year'), 
+      ee.Date(date).advance(windowWidth, increment).getRelative('day','year')))
+          .reduce(ee.Reducer.stdDev())
+          .set('day_of_year', ee.Date(date).getRelative('day','year').add(ee.Number(1)) );
+  }));
+  
+    var anomaly = ee.ImageCollection(
+    ee.FeatureCollection(years_list.map(function (y) {
+        var yearCollection = byInterval.filter(ee.Filter.calendarRange(y, y, 'year'));
+          var byYear = ee.ImageCollection.fromImages(
+            interval_list.map(function (inv) {
+              
+              var doy = ee.Date(inv).getRelative('day','year').add(ee.Number(1)) ;
+              var moy = ee.Date(inv).getRelative('month','year').add(ee.Number(1)) ; 
+              var dom = ee.Date(inv).getRelative('day','month').add(ee.Number(1)) ;
+              
+              var anomalyImage = yearCollection.filter(ee.Filter.calendarRange
+                  (ee.Date(inv).advance(-1*windowWidth,increment).getRelative('day','year'), 
+                  ee.Date(inv).advance(windowWidth, increment).getRelative('day','year')))
+              .mean()
+              .subtract(means.filter(ee.Filter.eq('day_of_year',doy)).first())
+              .divide(std_devs.filter(ee.Filter.eq('day_of_year',doy)).first()) ;
+              
+              return anomalyImage
+                .set('day_of_year', doy)
+                .set('year',y)
+                .set('system:time_start', ee.Date.fromYMD(y, moy, dom).millis()) ;
+            }));
+      return byYear;
+    }))
+  .flatten()); 
+  
+  return anomaly ;
+  
+} ;
+
+
+// Calculate seasonal total rainfall or SPI over a given season
+
+var seasonalTotal = function(intervalDataset,seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  // intervalDataset: output from rainfallIntervalSum or spi
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: length of season, in days
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var bySeason = ee.ImageCollection(
+  years_list.map(function(year) {
+    
+    var firstDoy = ee.Date.fromYMD(year,1,1) ;
+    var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+    var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+    
+    var oneYear = intervalDataset
+      .filterDate(startDate,endDate)
+      .sum(); 
+    return oneYear.set('year', ee.String(year)) ;
+  })) ;
+  
+  return bySeason ; 
+  
+} ;
+
+// calculate seasonal totals from station (point feature) data
+
+var seasonalTotalPoint = function(inputDataset,precName,seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  // inputDataset: feature collection of point data
+  // precName: name of precipitation property
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: length of season, in days
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var bySeason = ee.FeatureCollection(
+  years_list.map(function(year) {
+    
+    var firstDoy = ee.Date.fromYMD(year,1,1) ;
+    var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+    var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+    
+    var geom = inputDataset.first().geometry()
+    
+    var oneYear = inputDataset
+      .filterDate(startDate,endDate)
+      .reduceColumns(ee.Reducer.sum(),[precName]); 
+    return ee.Feature(geom,oneYear).set('year', ee.String(year)).set('id',1) ;
+  })) ;
+  
+  return bySeason ; 
+  
+} ;
+
+// Calculate seasonal maximum rainfall or SPI over a given season
+
+var seasonalMax = function(intervalDataset,seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  // intervalDataset: output from rainfallIntervalSum or spi
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: length of season, in days
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var bySeason = ee.ImageCollection(
+  years_list.map(function(year) {
+    
+    var firstDoy = ee.Date.fromYMD(year,1,1) ;
+    var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+    var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+    
+    var oneYear = intervalDataset
+      .filterDate(startDate,endDate)
+      .max(); 
+    return oneYear.set('year', ee.String(year)) ;
+  })) ;
+  
+  return bySeason ; 
+  
+} ;
+
+// # of days over threshold
+
+var seasonalWetDays = function(dataset,threshold,seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  // dataset: string; satellite to use ["CHIRPS","GPM"]
+  // threshold: integer; threshold of wet day in mm
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: integer; number of days that the agricultural year lasts
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  var rawData = rainfallDatasets[dataset] ;
+
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var totalSeasonDays = ee.Number(seasonLength) ; 
+  
+  var bySeason = ee.ImageCollection(
+  years_list.map(function(year) {
+    
+    var firstDoy = ee.Date.fromYMD(year,1,1) ;
+    var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+    var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+    
+    var oneYear = rawData
+      .filterDate(startDate,endDate) 
+      .map(function(image) {
+        var baseline = ee.Image(0) ;
+        var replacement = ee.Image(1) ;
+        var timestamp = image.get('system:time_start') ;
+        return baseline.where(image.gt(threshold),replacement).set('system:time_start',timestamp) ;
+      })
+      .sum()
+      .divide(totalSeasonDays)
+      .rename('wetDays'); 
+    return oneYear.set('year', ee.String(year)) ;
+  })) ;
+  
+  return bySeason ; 
+  
+} ;
+
+
+// Calculate climatology (mean and variance over each period of the year)
+
+
+var climatology = function(dataset,interval,increment,year_start,year_end) {
+
+  // dataset: string; satellite to use ["CHIRPS","GPM"]
+  // increment: string; unit of time ['day','week','month']
+  // interval: integer; number of [increment] to advance by
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+
+  var rawData = rainfallDatasets[dataset] ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  var start = '2018-01-01';
+  var startDate = ee.Date(start);
+  var secondDate = startDate.advance(interval, increment).millis();
+  var increase = secondDate.subtract(startDate.millis());
+  var interval_list = ee.List.sequence(startDate.millis(), ee.Date('2019-01-01').millis(), increase);
+ 
+  var byInterval = ee.ImageCollection(
+    ee.FeatureCollection(years_list.map(function (y) {
+        var yearCollection = rawData.filter(ee.Filter.calendarRange(y, y, 'year'));
+          var byYear = ee.ImageCollection.fromImages(
+            interval_list.map(function (inv) {
+              var summedImage = yearCollection.filter(ee.Filter.calendarRange
+                (ee.Date(inv).getRelative('day','year'), 
+                 ee.Date(inv).advance(interval, increment).getRelative('day','year'))
+                  )
+                .reduce(ee.Reducer.sum());
+              
+              var doy = ee.Date(inv).getRelative('day','year').add(ee.Number(1)) ;
+              var moy = ee.Date(inv).getRelative('month','year').add(ee.Number(1)) ; 
+              var dom = ee.Date(inv).getRelative('day','month').add(ee.Number(1)) ;
+              
+              return summedImage
+                .set('day_of_year', doy)
+                .set('system:time_start', ee.Date.fromYMD(y, moy, dom).millis()) ;
+            }));
+      return byYear;
+    }))
+  .flatten()); 
+  
+  var means = ee.ImageCollection(interval_list
+    .map(function(date) {
+      return byInterval.filter(ee.Filter.calendarRange
+      (ee.Date(date).getRelative('day','year'), 
+      ee.Date(date).advance(interval, increment).getRelative('day','year')))
+          .mean()
+          .set('day_of_year', ee.Date(date).getRelative('day','year').add(ee.Number(1)) );
+  }));
+  
+  var std_devs = ee.ImageCollection(interval_list
+    .map(function(date) {
+      return byInterval.filter(ee.Filter.calendarRange
+      (ee.Date(date).getRelative('day','year'), 
+      ee.Date(date).advance(interval, increment).getRelative('day','year')))
+          .reduce(ee.Reducer.stdDev())
+          .set('day_of_year', ee.Date(date).getRelative('day','year').add(ee.Number(1)) );
+  }));
+  
+  
+  return means.combine(std_devs) ;
+  
+} ;
+
+
+var drySpell = function(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end) {
+  
+  // dataset: string; satellite to use ["CHIRPS","GPM"]
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: integer; number of days that the agricultural year lasts
+  // threshold: daily rainfall threshold for defining a "dry day" 
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  
+  var rawData = rainfallDatasets[dataset] ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var runDateCollection = ee.ImageCollection(years_list.map(function (y) {
+        
+      var firstDoy = ee.Date.fromYMD(y,1,1) ;
+      var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+      var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+        
+      var collection = rawData
+        .filterDate(startDate,endDate)
+        .map(function(img){
+          var zero = ee.Image(0) ;
+          var one = ee.Image(1) ;
+          return one.where(img.lt(threshold),zero) ; 
+        }) ;
+        
+      // dry spell analysis 
+      
+      //----------------------------------------------------------------
+      
+      // We're only working with a single axis: #0
+      var axis = 0;
+      
+      // computes the foward difference of an array image.
+      var forwardDifference = function(image) {
+        var left = image.arraySlice(0, 0, -1)
+        var right = image.arraySlice(0, 1)
+        return left.subtract(right)
+      } ;
+      
+      // Convert to a 2D array-valued image and flatten to 1D using arrayReshape().
+      var precipitation = collection.toArray() ;
+      precipitation = precipitation.arrayReshape(precipitation.arrayLength(0).toArray(), 1) ;
+      
+      // Compute the forward difference
+      var difference = forwardDifference(precipitation);
+      var ones = ee.Image(ee.Array([1]))
+      difference = ones.addBands(difference).toArray(0); // Prepend a 1 to the differences.
+      
+      // Make an index array sized for the length of the data in each pixel.
+      var maxSize = collection.size()
+      var indexes = ee.Image.constant(ee.Array(ee.List.sequence(0, maxSize)));
+      indexes = indexes.arraySlice(axis, 0, precipitation.arrayLength(0));
+      
+      var runStarts = indexes.arrayMask(difference.neq(0))
+      var runValues = precipitation.arrayMask(difference.neq(0))
+      // Append an extra index to mark the end of the last run.
+      var runLengths = runStarts.addBands(precipitation.arrayLengths()).toArray(0)
+      var runLengths = forwardDifference(runLengths.multiply(-1))
+            
+      // dry spells
+      
+      var dryRunStarts = runStarts.arrayMask(runValues.eq(0))
+      var dryRunLengths = runLengths.arrayMask(runValues.eq(0))
+      
+      var driestIndex = dryRunLengths.arrayArgmax().arrayGet(0)
+      
+      var dryRunDate = dryRunStarts.arrayGet(driestIndex)
+      var dryRunLength = dryRunLengths.arrayGet(driestIndex)
+      
+      return ee.Image([dryRunDate,dryRunLength])
+      .rename(['dryRunDate','dryRunLength']).set('year',y) ;
+      
+  })) ; 
+ 
+ return runDateCollection ; 
+  
+}
+
+
+var rainySpell = function(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end) {
+  
+  // dataset: string; satellite to use ["CHIRPS","GPM"]
+  // seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+  // seasonLength: integer; number of days that the agricultural year lasts
+  // threshold: daily rainfall threshold for defining a "wet day" 
+  // year_start: integer; first calendar year for calculation
+  // year_end: integer; last calendar year for calculation
+  
+  
+  var rawData = rainfallDatasets[dataset] ;
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var runDateCollection = ee.ImageCollection(years_list.map(function (y) {
+        
+      var firstDoy = ee.Date.fromYMD(y,1,1) ;
+      var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+      var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+        
+      var collection = rawData
+        .filterDate(startDate,endDate)
+        .map(function(img){
+          var zero = ee.Image(0) ;
+          var one = ee.Image(1) ;
+          return one.where(img.lt(threshold),zero) ; 
+        }) ;
+        
+      // wet spell analysis 
+      
+      //----------------------------------------------------------------
+      
+      // We're only working with a single axis: #0
+      var axis = 0;
+      
+      // computes the foward difference of an array image.
+      var forwardDifference = function(image) {
+        var left = image.arraySlice(0, 0, -1)
+        var right = image.arraySlice(0, 1)
+        return left.subtract(right)
+      } ;
+      
+      // Convert to a 2D array-valued image and flatten to 1D using arrayReshape().
+      var precipitation = collection.toArray() ;
+      precipitation = precipitation.arrayReshape(precipitation.arrayLength(0).toArray(), 1) ;
+      
+      // Compute the forward difference
+      var difference = forwardDifference(precipitation);
+      var ones = ee.Image(ee.Array([1]))
+      difference = ones.addBands(difference).toArray(0); // Prepend a 1 to the differences.
+      
+      // Make an index array sized for the length of the data in each pixel.
+      var maxSize = collection.size()
+      var indexes = ee.Image.constant(ee.Array(ee.List.sequence(0, maxSize)));
+      indexes = indexes.arraySlice(axis, 0, precipitation.arrayLength(0));
+      
+      var runStarts = indexes.arrayMask(difference.neq(0))
+      var runValues = precipitation.arrayMask(difference.neq(0))
+      // Append an extra index to mark the end of the last run.
+      var runLengths = runStarts.addBands(precipitation.arrayLengths()).toArray(0)
+      var runLengths = forwardDifference(runLengths.multiply(-1))
+            
+      // rainy spells
+      
+      var wetRunStarts = runStarts.arrayMask(runValues.gt(0))
+      var wetRunLengths = runLengths.arrayMask(runValues.gt(0))
+      
+      var wettestIndex = wetRunLengths.arrayArgmax().arrayGet(0)
+      
+      var noRuns = ee.Image(0).updateMask(wettestIndex)
+
+      var wetRunDate = noRuns.unmask(wetRunStarts.arrayGet(wettestIndex))
+      var wetRunLength = noRuns.unmask(wetRunLengths.arrayGet(wettestIndex))
+      
+      return ee.Image([wetRunDate,wetRunLength])
+      .rename(['wetRunDate','wetRunLength']).set('year',y) ;
+      
+  })) ; 
+  
+  return runDateCollection ; 
+}
+
+// compute rainfall progression in historical years vs forecast
+
+var forecastMonitor = function(clim_years,season_start_day,season_length,monitor_year,
+                                  selected,forecast,forecast_var,results,results2,monitor_data) {
+
+
+  var chirps = ee.ImageCollection("UCSB-CHC/CHIRPS/V3/PENTAD")
+    .select(['precipitation'])
+    .sort('system:time_start') ;
+  
+  var climatology = ee.ImageCollection(
+      ee.FeatureCollection(clim_years.map(function (y) {
+          
+          var firstDoy = ee.Date.fromYMD(y,1,1) ;
+          var startDate = firstDoy.advance(season_start_day-1,'day') ; // start date of ag year
+          var endDate = startDate.advance(season_length,'day') ; // end date of ag year
+        
+          var yearCollection = chirps.filterDate(startDate,endDate);
+            var byYear = ee.ImageCollection(yearCollection.iterate(
+              function (image, acc) {
+                image = ee.Image(image).set('year',ee.String(y)) ;
+                acc = ee.ImageCollection(acc)
+                var last = ee.Image(acc.get('last'))
+                var value = last
+                  .add(image)
+                  .unmask(last)
+                  .copyProperties(image, image.propertyNames())
+                return acc
+                  .merge(ee.ImageCollection([value]))
+                  .set('last', value)
+                  
+                  
+              },
+            ee.ImageCollection([]).set('last', ee.Image(0).rename('precip'))
+          )
+        );
+        return byYear;
+      }))
+    .flatten());
+
+ // compute historical trigger percentile
+  
+  var percentiles = ee.ImageCollection(
+        clim_years.map(function (y) {
+         var yearTotal = climatology
+          .filter(ee.Filter.eq('year',ee.String(y)))
+          .sort('system:time_start',false)
+          .first()
+       
+       return(yearTotal) ;
+  
+    })).reduce(ee.Reducer.percentile([20])).rename('trigger');
+
+  var percentilesAll = ee.ImageCollection(
+        clim_years.map(function (y) {
+         var yearTotal = climatology
+          .filter(ee.Filter.eq('year',ee.String(y)))
+          .sort('system:time_start',false)
+          .first()
+       
+       return(yearTotal) ;
+  
+    })).reduce(ee.Reducer.percentile(ee.List.sequence(10,100,10))) ;
+    
+    var bands = percentilesAll.bandNames()
+    var list = bands.map(function(n) { return percentilesAll.select([n]) })
+    var percentilesAll = ee.ImageCollection.fromImages(list).map(function(n){
+      var index = n.get('system:index')
+      return n.set('index_num',ee.Number(index))
+    }) ;
+
+  // compute climatological prob. of non-exceedence
+  
+  var climExceedence = ee.ImageCollection(
+        clim_years.map(function (y) {
+         var yearTotal = climatology
+          .filter(ee.Filter.eq('year',ee.String(y)))
+          .sort('system:time_start',false)
+          .first()
+        
+        var zero = ee.Image(0)
+        var one = ee.Image(1)
+        
+        var output = zero.where(yearTotal.lt(percentiles),one) ;
+            
+        return output.set('year',ee.String(y));
+  
+    }));
+  
+  var climExeedenceProb = climExceedence.mean().rename(['climProb'])
+  
+  
+  // compute forecast confidence interval
+  
+  var forecastUpper = forecast.add((forecast_var.sqrt()).multiply(1)).rename(['forecastUpper']) ;
+  var forecastLower = forecast.subtract((forecast_var.sqrt()).multiply(1)).rename(['forecastLower']) ;
+  
+  // compute forecast trigger PoNE
+  
+  var forecastZ = percentiles.subtract(forecast).divide(forecast_var.sqrt())
+  function eeCdf(z) {
+    return ee.Image(0.5)
+        .multiply(ee.Image(1).add(ee.Image(z).divide(ee.Image(2).sqrt()).erf()));
+  } 
+  var forecastTrigProb = eeCdf(forecastZ).rename('forecastTrigProb') ;
+  
+  // compute conditional prob. of non-exceedence given rainfall so far
+  /// NOTE: we are defining analog years at the spatial aggregate level, not pixel-wise.
+  /// this is for ease / speed of computation. may change this in the future.
+  
+  var monFirstDoy = ee.Date.fromYMD(monitor_year,1,1) ;
+  var monStartDate = monFirstDoy.advance(season_start_day-1,'day') ; // start date of ag year
+  var monEndDate = monStartDate.advance(season_length,'day') ; // end date of ag year
+  
+  var monitor_start = monStartDate 
+  var monitor_latest = monEndDate 
+  
+  var currentData = monitor_data.filterDate(monitor_start,monitor_latest)
+  
+  var currentCum =  ee.ImageCollection(currentData.iterate(
+              function (image, acc) {
+                image = ee.Image(image)
+                acc = ee.ImageCollection(acc)
+                var last = ee.Image(acc.get('last'))
+                var value = last
+                  .add(image)
+                  .unmask(last)
+                  .copyProperties(image, image.propertyNames())
+                return acc
+                  .merge(ee.ImageCollection([value]))
+                  .set('last', value)
+                  
+                  
+              },
+            ee.ImageCollection([]).set('last', ee.Image(0).rename('precip'))
+  ))
+  
+  
+  var currentTotal = currentCum
+          .sort('system:time_start',false)
+          .max()
+          
+  var latestTotal = currentTotal.reduceRegion({
+        geometry:selected,
+        crs:"EPSG:4326",
+        crsTransform:[5/60,0,0,0,5/60,0], // 5 arcmin resolution grid
+        bestEffort:true, 
+        reducer:ee.Reducer.mean()
+      }).get("precip") ;
+  
+  var range = currentData.reduceColumns(ee.Reducer.minMax(), ["system:time_start"]) ;
+  var latestDataDate = ee.Date(range.get('max')) ;
+  var days_so_far = latestDataDate.difference(monStartDate,'days') ;
+  
+  var analogYears = ee.ImageCollection(
+        clim_years.map(function (y) {
+          
+        var firstDoy = ee.Date.fromYMD(y,1,1) ;
+        var startDate = firstDoy.advance(season_start_day-1,'day') ; // start date of ag year
+        var endDate = startDate.advance(season_length,'day') ; // end date of ag year
+        
+        var latestDate = startDate.advance(days_so_far,'day') ;
+        
+        var firstDate = startDate ;  
+        
+        var lastDate =  ee.Date(ee.Number(latestDate.millis())
+           .min(ee.Number(endDate.millis()))
+       ) ;
+          
+         var yearTotal = climatology
+          .filter(ee.Filter.eq('year',ee.String(y)))
+          .filterDate(firstDate,lastDate)
+          .sort('system:time_start',false)
+          .max()
+            
+        return yearTotal.set('year',ee.String(y));
+  
+  }));
+  
+  function getMaxPrecip(image){
+      var maxValue = image.select("precip").reduceRegion({
+        geometry:selected,
+        crs:"EPSG:4326",
+        crsTransform:[5/60,0,0,0,5/60,0], 
+        bestEffort:true, 
+        reducer:ee.Reducer.mean()
+      }).get("precip");
+      return image.set({
+        maxprecip: maxValue
+      })
+  }  
+
+  var analogYears = analogYears.map(getMaxPrecip)
+      .filter(ee.Filter.rangeContains('maxprecip',ee.Number(latestTotal).subtract(50),
+      ee.Number(latestTotal).add(50))) ;
+
+  var analogYearsSeq = analogYears.aggregate_array('year')
+  
+  var climExceedenceCond = ee.ImageCollection(
+        analogYearsSeq.map(function (y) {
+         var yearTotal = climatology
+          .filter(ee.Filter.eq('year',ee.String(y)))
+          .sort('system:time_start',false)
+          .max()
+        
+        var zero = ee.Image(0)
+        var one = ee.Image(1)
+        
+        var output = zero.where(yearTotal.lt(percentiles),one) ;
+            
+        return output.set('year',ee.String(y));
+  
+    }));
+  
+  var climExeedenceProbCond = climExceedenceCond.mean().rename(['climProbCond'])
+  
+  // combine stats for visualization
+  
+  /// point value data
+  
+  var forecast = forecast.rename(['forecast']) ;
+  var ts_combined = currentCum.map(function(img) {
+    
+    var newBands = ee.Image([forecast,forecastUpper,forecastLower,percentiles])
+    
+   return img.addBands(newBands)
+    
+  }) ;
+  
+  /// probability data
+  
+  var probsCombined = ee.Image([climExeedenceProb,climExeedenceProbCond,forecastTrigProb]) ;
+  
+  // plot
+  
+  
+  var monitor_start_doy = monitor_start.getRelative('day','year') ;
+  var monitor_end_doy = monitor_latest.getRelative('day','year') ;
+  var maxPrecip = climatology.max().reduceRegion(ee.Reducer.mean(),selected).get('precip');
+  var maxPrecip = ee.Number(maxPrecip).add(50) ;
+
+  function chartClim(point) {
+  
+    var chart =  ui.Chart.image.doySeriesByYear({
+        bandName: 'precip',
+        imageCollection: climatology.filter(ee.Filter.inList('year',analogYearsSeq)), 
+        region: point, 
+        regionReducer: ee.Reducer.mean(), 
+        scale: 1000
+      }).setOptions({
+        title:'Historical Years w/ This Much Rain to Date',
+        hAxis:{viewWindow:{min:monitor_start_doy,max:monitor_end_doy}}, 
+        vAxis:{viewWindow:{min:0,max:maxPrecip.getInfo()},title:'Cumulative rainfall (mm)'}
+      
+      }) ;
+    
+    return chart ;
+  
+  }
+  
+  
+  function chartCurrent(point) {
+  
+    
+    var chart =  ui.Chart.image.doySeries({
+        imageCollection: ts_combined, 
+        region: point, 
+        regionReducer: ee.Reducer.mean(), 
+        scale: 1000
+      })
+      .setSeriesNames(['Fcast lower bound','Fcast upper bound','Fcast','Current season',"Trig. threshold"])
+      .setOptions({
+        title:'Forecast & Rainfall So Far This Year',
+        hAxis:{viewWindow:{min:monitor_start_doy,max:monitor_end_doy}}, 
+        vAxis:{viewWindow:{min:0,max:maxPrecip.getInfo()},title:'Cumulative rainfall (mm)'}
+      
+      })
+    
+    return chart ;
+  
+  }
+  
+  function chartProb(point) {
+  
+    
+    var chart =  ui.Chart.image.histogram({
+        image: probsCombined, 
+        region: point, 
+        scale: 1000,
+        minBucketWidth: 0.1
+      })
+      .setSeriesNames(['Clim. prob','Condtl. prob','Fcast prob'])
+      .setOptions({
+        title:'Trigger Probabilities'
+      })
+    
+    return chart ;
+  
+  }
+  
+    function chartPercentiles(point) {
+  
+    
+    var chart =  ui.Chart.image.series({
+        imageCollection: percentilesAll, 
+        region: point, 
+        scale: 1000,
+        reducer: ee.Reducer.mean(),
+        xProperty:'index_num'
+      })
+      .setOptions({
+        title:'Climatological Percentiles',
+          lineWidth: 5,
+      })
+    
+    return chart ;
+  
+  }
+  
+  
+  
+  results.clear().add(chartCurrent(selected)).add(chartClim(selected));
+  results2.clear().add(chartProb(selected)).add(chartPercentiles(selected));
+
+}
+
+
+exports.rainfallDatasets = rainfallDatasets ; 
+exports.rainfallIntervalSum = rainfallIntervalSum ;
+exports.onsetDate = onsetDate ;
+exports.cessationDate = cessationDate ;
+exports.spi = spi ;
+exports.seasonalTotal = seasonalTotal ; 
+exports.seasonalTotalPoint = seasonalTotalPoint ; 
+exports.seasonalMax = seasonalMax ; 
+exports.seasonalWetDays = seasonalWetDays ; 
+exports.climatology = climatology ;
+exports.drySpell = drySpell ;
+exports.rainySpell = rainySpell ;
+exports.forecastMonitor = forecastMonitor ;

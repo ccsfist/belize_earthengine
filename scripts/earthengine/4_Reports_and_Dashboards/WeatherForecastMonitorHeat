@@ -1,0 +1,354 @@
+// load libraries
+
+var rainfallFunctions = require('users/maxmauerman/belize_nms:1_HazardMetrics/RainfallFunctions') ;
+var temperatureFunctions = require('users/maxmauerman/belize_nms:1_HazardMetrics/TemperatureFunctions') ;
+var statsFunctions = require('users/maxmauerman/belize_nms:2_Statistics/StatsFunctions') ;
+var projectionFunctions = require('users/maxmauerman/belize_nms:2_Statistics/ProjectionFunctions') ;
+var arealFunctions = require('users/maxmauerman/belize_nms:3_ArealSummary/SpatialAvgFunctions') ;
+
+var muni = ee.FeatureCollection('WM/geoLab/geoBoundaries/600/ADM2').filter(ee.Filter.eq("shapeGroup","BLZ")) ;
+
+var monitor_year = ee.Number(ui.url.get('year',2025)) ;
+var monitor_month = ee.Number(ui.url.get('year',6)) ;
+var monitor_day = ee.Number(ui.url.get('year',1)) ;
+
+var monitor_date = ee.String(monitor_year).cat("/").cat(ee.String(monitor_month))
+  .cat("/").cat(ee.String(monitor_day))
+  
+var monitor_date = ee.Date.parse("YYYY/MM/dd",monitor_date)
+
+
+// Get heat forecasts created on this date
+var forecasts = ee.ImageCollection('NOAA/GFS0P25')
+                    .filter(ee.Filter.date(monitor_date))
+                    .select('temperature_2m_above_ground')
+                    .sort('forecast_hours');
+
+var forecastRange = forecasts.reduceColumns(ee.Reducer.minMax(), ["forecast_time"]) ;
+var forecastFirst = forecastRange.get('min') ;
+var forecastLast = forecastRange.get('max') ;
+
+var interval = 1;
+var increment = 'day';
+
+var windowStartDate = ee.Date(forecastFirst) ; 
+var windowEndDate = ee.Date(forecastLast) ;
+var secondWindowDate = windowStartDate.advance(interval, increment).millis();
+
+var windowIncrease = secondWindowDate.subtract(windowStartDate.millis());
+var window_list = ee.List.sequence(windowStartDate.millis(),
+    windowEndDate.millis(), windowIncrease);
+
+// Chart the average temp for all of Belize over the next 15
+// days.
+
+var belize = ee.FeatureCollection('WM/geoLab/geoBoundaries/600/ADM0')
+                .filter(ee.Filter.eq('shapeName', 'Belize'))
+                .first()
+                .geometry();
+
+
+// Also display the average temp forecast 
+Map.centerObject(belize);
+Map.addLayer(
+    forecasts.mean().clip(belize), {
+      min: 10,
+      max: 30,
+      palette: ['blue', 'green', 'yellow', 'orange', 'red'],
+    },
+    '15-day average temp',false);
+    
+    
+// compute daily maxima
+
+var byWindow = ee.ImageCollection.fromImages(
+      window_list.map(function(date) {
+
+        var firstDate = ee.Date(date).millis()
+        var lastDate = ee.Date(date).advance(interval, increment).millis()
+
+        var total = forecasts
+        .filter(ee.Filter.rangeContains('forecast_time',firstDate,lastDate))
+        .max()
+        
+        return total
+            .set('date',date);
+}));
+
+
+// compute heat waves
+
+var heatThresh = 35 ; 
+
+var collection = byWindow
+        .map(function(img){
+          var zero = ee.Image(0) ;
+          var one = ee.Image(1) ;
+          return one.where(img.lt(heatThresh),zero) ; 
+        }) ;
+
+      // heat wave analysis 
+      
+      //----------------------------------------------------------------
+      
+      // We're only working with a single axis: #0
+      var axis = 0;
+      
+      // computes the foward difference of an array image.
+      var forwardDifference = function(image) {
+        var left = image.arraySlice(0, 0, -1)
+        var right = image.arraySlice(0, 1)
+        return left.subtract(right)
+      } ;
+      
+      // Convert to a 2D array-valued image and flatten to 1D using arrayReshape().
+      var precipitation = collection.toArray() ;
+      precipitation = precipitation.arrayReshape(precipitation.arrayLength(0).toArray(), 1) ;
+      
+      // Compute the forward difference
+      var difference = forwardDifference(precipitation);
+      var ones = ee.Image(ee.Array([1]))
+      difference = ones.addBands(difference).toArray(0); // Prepend a 1 to the differences.
+      
+      // Make an index array sized for the length of the data in each pixel.
+      var maxSize = collection.size()
+      var indexes = ee.Image.constant(ee.Array(ee.List.sequence(0, maxSize)));
+      indexes = indexes.arraySlice(axis, 0, precipitation.arrayLength(0));
+      
+      var runStarts = indexes.arrayMask(difference.neq(0))
+      var runValues = precipitation.arrayMask(difference.neq(0))
+      // Append an extra index to mark the end of the last run.
+      var runLengths = runStarts.addBands(precipitation.arrayLengths()).toArray(0)
+      var runLengths = forwardDifference(runLengths.multiply(-1))
+            
+      // rainy spells
+      
+
+      var hotRunStarts = runStarts.arrayMask(runValues.gt(0))
+      var hotRunLengths = runLengths.arrayMask(runValues.gt(0))
+      
+      var hottestIndex = hotRunLengths.arrayArgmax().arrayGet(0)
+      
+      var noRuns = ee.Image(0).updateMask(hottestIndex)
+      
+      var hotRunDate = noRuns.unmask(hotRunStarts.arrayGet(hottestIndex))
+      var hotRunLength = noRuns.unmask(hotRunLengths.arrayGet(hottestIndex))
+      
+      var hotSpells = ee.Image([hotRunDate,hotRunLength])
+      .rename(['hotRunDate','hotRunLength']) ;
+
+var hotSpellsCorrected = hotSpells.select('hotRunLength').unmask(ee.Image(0))
+
+Map.addLayer(
+    hotSpellsCorrected.clip(belize), {
+      min: 0,
+      max: 15,
+      palette: ['blue', 'green', 'yellow', 'orange', 'red'],
+    },
+    'Length of hot spells',false);
+
+// compute whether it's past danger threshold or not 
+
+var thresh = 2 ;
+var zero = ee.Image(0) ;
+var two = ee.Image(2) ;
+
+var crossesThresh = zero.where(hotSpellsCorrected.gt(thresh),two).updateMask(hotSpellsCorrected)
+  .unmask(ee.Image(0))
+
+Map.addLayer(
+    crossesThresh.clip(belize), {
+      min: 0,
+      max: 2,
+      palette: ['blue','yellow','red'],
+    },
+    'Past danger threshold?');
+
+
+
+/// exposure 
+  
+  
+  var landcover = ee.Image('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019')
+  .select('discrete_classification').clip(belize);
+  
+  Map.addLayer(landcover, {}, 'Land Cover',false);
+  
+  /// urban
+  
+  var urban = landcover.updateMask(landcover.eq(50)).focalMean({
+    radius:2000,units:'meters'}).toByte()
+    .reduceToVectors({
+    geometry: belize,
+    scale: 1000,
+    tileScale: 2
+  }).geometry() ;
+  Map.addLayer(urban, {color:'red'}, 'Urban Area',false);
+  
+  
+  /// agricultural
+  
+  var ag = landcover.updateMask(landcover.eq(40)).focalMean({
+    radius:2000,units:'meters'}).toByte()
+    .reduceToVectors({
+    geometry: belize,
+    scale: 1000,
+    tileScale: 2
+  }).geometry().difference(urban,1) ;
+  
+  Map.addLayer(ag, {color:"green"}, 'Cultivated Area',false);
+
+  // protected areas
+  
+  var protected_area = ee.FeatureCollection('WCMC/WDPA/current/polygons');
+  var protectedVis = {
+    palette: ['2ed033', '5aff05', '67b9ff', '5844ff', '0a7618', '2c05ff'],
+    min: 0.0,
+    max: 1550000.0,
+    opacity: 0.8,
+  };
+  var protectedImg = ee.Image().float().paint(protected_area, 'REP_AREA');
+  Map.addLayer(protectedImg.clip(belize), protectedVis, 'Protected areas',false);
+  
+// Creates a color bar thumbnail image for use in legend from the given color
+  // palette.
+  
+  
+  var vis = { 
+      min: 0,
+      max: 2,
+      palette: ['blue','yellow','red'],
+  };
+  
+  function makeColorBarParams(palette) {
+    return {
+      bbox: [0, 0, 1, 0.1],
+      dimensions: '100x10',
+      format: 'png',
+      min: 0,
+      max: 1,
+      palette: palette,
+    };
+  }
+  
+  // Create the color bar for the legend.
+  var colorBar = ui.Thumbnail({
+    image: ee.Image.pixelLonLat().select(0),
+    params: makeColorBarParams(vis.palette),
+    style: {stretch: 'horizontal', margin: '0px 8px', maxHeight: '24px'},
+  });
+  
+  // Create a panel with three numbers for the legend.
+  var legendLabels = ui.Panel({
+    widgets: [
+      ui.Label(vis.min, {margin: '4px 8px'}),
+      ui.Label(
+          ((vis.max-vis.min) / 2+vis.min),
+          {margin: '4px 8px', textAlign: 'center', stretch: 'horizontal'}),
+      ui.Label(vis.max, {margin: '4px 8px'})
+    ],
+    layout: ui.Panel.Layout.flow('horizontal')
+  });
+  
+  var legendTitle = ui.Label({
+    value: 'Heat wave danger threshold',
+    style: {fontWeight: 'bold'}
+  });
+  
+  // Add the legendPanel to the map.
+  var legendPanel = ui.Panel([legendTitle, colorBar, legendLabels]);
+  Map.add(legendPanel);
+  
+
+// 3. visualize
+  
+      var empty = ee.Image().byte();
+  var outline = empty.paint({
+    featureCollection: muni, 
+    color: 1,
+    width: 1
+  });
+  Map.addLayer(outline, {palette: 'FFFFFF'}, 'Admin areas') ;
+  
+  /// UI elements - don't need to change this other than label text and chart names
+  
+  Map.add(ui.Label(
+    'Forecast Monitor - Heat Waves', {fontWeight: 'bold', fontSize: '24px'})); // update as needed
+  Map.add(ui.Label('Click on admin areas for detailed forecast info. See *Layers* for map overlays.')) ;
+  
+  var HIGHLIGHT_STYLE = {color: '8856a7', fillColor: '8856a700', width: 4};
+  
+  var resultsPanel = ui.Panel({style: {position: 'bottom-right'}});
+  Map.add(resultsPanel);
+
+  var buttonPanel = ui.Panel(
+    [ui.Button('Clear results', clearResults)],
+    ui.Panel.Layout.Flow('horizontal'), {margin: '0 0 0 auto', width: '500px'});
+  
+  var selectedPoints = [] ;
+  Map.style().set({cursor: 'crosshair'});
+  
+  function clearResults() {
+    var n_layers = Map.layers().length() -1 ;
+    selectedPoints = [];
+    Map.layers().remove(Map.layers().get(n_layers)); 
+      var instructionsLabel = ui.Label('Select regions to compare forecast.'); // update as needed
+      resultsPanel.widgets().reset([instructionsLabel]);
+     Map.addLayer(muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)).style(HIGHLIGHT_STYLE));
+  }
+  
+  function handleMapClick(location) {
+    selectedPoints.push([location.lon, location.lat]);
+    updateChart();
+  }
+  Map.onClick(handleMapClick);
+
+  function updateOverlay() {
+    var n_layers = Map.layers().length() -1 ;
+    var overlay = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)).style(HIGHLIGHT_STYLE);
+    Map.layers().set(n_layers, ui.Map.Layer(overlay));
+  }
+
+  function updateChart() {
+    var chart = rawChart(); // update these if you want to view different charts than the below
+    var chart2 = aggregateChart() ;
+    updateOverlay();
+    resultsPanel.clear().add(chart).add(chart2).add(buttonPanel);
+  }
+  
+  
+  /// chart functions
+ 
+  
+  function rawChart() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+     var chart = ui.Chart.image.series({
+      'imageCollection': forecasts,
+      'region': selectedMuni,
+      'xProperty': 'forecast_hours',
+    });
+    
+    return chart ;
+    
+  }
+
+  function aggregateChart() {
+    
+    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
+    
+     var chart = ui.Chart.image.series({
+      'imageCollection': byWindow,
+      'region': selectedMuni,
+      'xProperty': 'date',
+    });
+    
+    return chart ;
+    
+  }
+  
+  // utility layer to keep things in the right order
+  
+  Map.addLayer(muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)).style(HIGHLIGHT_STYLE));
+  

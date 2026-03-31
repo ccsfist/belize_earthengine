@@ -48,8 +48,12 @@ colnames(data_table) <- make.unique(colnames(data_table))
 
 ## filter out test subs, if any
 
-data_table <- data_table %>% filter(user != "Max Mauerman") %>%
-  mutate(district = gsub("_"," ",district))
+data_table <- data_table %>% filter(user != "MAX TEST") %>%
+  mutate(district = gsub("_"," ",district)) %>%
+  group_by(user) %>%
+  mutate(n = c(1:n())) %>%
+  mutate(user = paste0(user,"_",n)) %>%
+  ungroup()
 
 # Reshape
 
@@ -108,9 +112,10 @@ years_long <- years_long %>%
   mutate(num_average = sum(ifelse(category == "average_year",1,0)),max_rank = max(year) - min(year) + 1) %>%
   mutate(rank_all = ifelse(category == "bad_year" & !is.na(rank_severe),rank_severe,NA)) %>% 
   mutate(rank_all = ifelse(category == "bad_year" & is.na(rank_severe) & !is.na(rank_moderate),rank_moderate + max_severe,rank_all)) %>% 
-  mutate(rank_all = ifelse(category == "bad_year" & is.na(rank_severe) & is.na(rank_moderate),median(rank_all),rank_all)) %>% ## if year was listed as bad but not ranked
+  mutate(rank_all = ifelse(category == "bad_year" & is.na(rank_severe) & is.na(rank_moderate),median(rank_all,na.rm=T),rank_all)) %>% ## if year was listed as bad but not ranked
   mutate(rank_all = ifelse(category == "average_year",max_moderate + num_average,rank_all)) %>%
   mutate(rank_all = ifelse(category == "good_year",max_rank,rank_all)) %>%
+  mutate(rank_all = ifelse(is.infinite(rank_all),max_rank,rank_all)) %>%
   ungroup()
   
 years_long_clean <- years_long %>%
@@ -141,21 +146,31 @@ years_vis <- years_vis %>%
     ),
     string.rank = fct_reorder(string.rank, num.rank))
 
-ggplot(years_vis) + 
-  geom_tile(aes(factor(user), year, fill = string.rank,),
+ggplot(years_vis %>% filter(!is.na(hazard_name))) + 
+  geom_tile(aes(user, year, fill = string.rank,),
             alpha = .7,size=0.5) + 
-  # facet_wrap(~woreda.x,scales="free_x") +
+  facet_wrap(~hazard_name,scales="free_x") +
   scale_fill_manual(values = rev(brewer.pal(8,"Reds")),na.value = 'white') + 
   scale_y_discrete(breaks = c(2000:2025),limits=c(2000:2025)) +
   theme_tufte() + 
-  labs(fill = "Bad Year Rank", title = "Top Years by User Input",
-       subtitle = "Darker means worse year.") + 
+  labs(fill = "Bad Year Rank", title = paste0("Top Years by User Input")) + 
   theme(
-    axis.text.x = element_text(angle=90,size=12),
-    axis.text.y = element_text(size=12),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size=8),
     panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
     legend.position = "bottom",
     axis.title = element_blank())
+
+
+  
+years_calendar <- years_long_clean %>% filter(!is.na(seasonality)) %>% separate_wider_delim(seasonality," ",names_sep = "_",too_few = "align_start") %>%
+  pivot_longer(c(seasonality_1:seasonality_11),names_to = "var",values_to = "month") %>%
+  filter(!is.na(month))
+
+ggplot(years_calendar %>% mutate(month = as.numeric(month))) + geom_tile(aes(x=month,y=year),alpha=0.4) + facet_wrap(~hazard_name) +
+  scale_x_continuous(breaks=c(1:12)) +
+  scale_y_discrete(breaks = c(2000:2025),limits=c(2000:2025)) +
+  ggtitle("Reported Disaster Timing")
 
 ## aggregate over districts, hazards 
 
@@ -167,6 +182,29 @@ years_long_average <- years_long_clean %>%
 # Export
 
 write.csv(years_long_average,"expert_bad_years_belize.csv",row.names = FALSE)
+
+
+## tabulate community questions
+
+community <- data_table %>% dplyr::select(hazard_name, organization,community_what)
+
+write.csv(community,'community_qs.csv',row.names = FALSE)
+  
+## tabulate info questions
+
+info <- data_table %>% filter(!is.na(climate_info)) %>% dplyr::select(c(hazard_name,organization,climate_info,climate_lead,climate_who)) %>%
+    pivot_longer(c(climate_info:climate_who))
+  
+write.csv(info,'forecast_info.csv',row.names = FALSE)
+
+
+## tabulate action questions
+
+actions <- data_table %>% filter(!is.na(climate_info)) %>% dplyr::select(c(hazard_name,organization,severe_actions_1:moderate_actions_3)) %>%
+    pivot_longer(c(severe_actions_1:moderate_actions_3)) %>%
+    filter(!is.na(value))
+  
+write.csv(actions,'forecast_actions.csv',row.names = FALSE)
 
 
 

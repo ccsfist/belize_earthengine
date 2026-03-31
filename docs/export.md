@@ -19,5 +19,5 @@ Note that Google Earth Engine's usage limitations may block very large exports. 
 
 **As your assignment for today**, we would like you to produce a custom hazard map for presentation in the stakeholder workshop tomorrow, following the steps described here. The final tab of this document contains a detailed reference to the code functions, if needed. 
 
-<div id="slide-config" data-type="simple" data-next="../functionguide/" data-kobo-id="hACTMCaZ" data-width="100%"> </div>
+<div id="slide-config" data-type="simple" data-next="../publish/" data-kobo-id="hACTMCaZ" data-width="100%"> </div>
 

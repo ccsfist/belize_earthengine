@@ -1,0 +1,346 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var gmt = ee.FeatureCollection("projects/ee-maxmauerman/assets/CMIPGlobalTemp");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+
+
+var region = ee.FeatureCollection("FAO/GAUL/2015/level0").
+  filter(ee.Filter.inList("ADM0_NAME",ee.List(['Belize']))) ; // change as you'd like 
+
+/*
+
+decomposes historical rainfall into anthropogenic trend, decadal and interannual variability
+
+after https://iridl.ldeo.columbia.edu/maproom/Global/Time_Scales/precipitation.html
+
+*/
+
+/// compute annual climate measure
+
+var chirps = ee.ImageCollection("UCSB-CHG/CHIRPS/PENTAD").select('precipitation') ;
+
+var seasonTotal = function(seasonStartDoy,seasonLength,year_start,year_end) {
+  
+  var years_list = ee.List.sequence(year_start,year_end) ;
+  
+  var compiledDataset = ee.ImageCollection(years_list.map(function (y) {
+      
+      var firstDoy = ee.Date.fromYMD(y,1,1) ;
+      var startDate = firstDoy.advance(seasonStartDoy-1,'day') ; // start date of ag year
+      var endDate = startDate.advance(seasonLength,'day') ; // end date of ag year
+      
+      var yearCollection = chirps
+          .filterDate(startDate,endDate) 
+          .reduce(ee.Reducer.sum())
+          .set('year',y) 
+          .set('system:time_start', ee.Date.fromYMD(y, 1, 1).millis()) ; 
+          
+    return yearCollection;
+  })) ; 
+
+  return compiledDataset ; 
+    
+} ;
+
+var annualClim = seasonTotal(121,274,1982,2024) ; // edit as necessary
+
+/// format global mean temp data and merge w annual clim
+
+var gmtList = gmt.toList(gmt.size()) ;
+var gmtYears = ee.List.sequence(1901,2065) ;
+
+var gmtImages = ee.ImageCollection(gmtYears.map(function(year){
+  var yearTemp = ee.Feature(gmtList.get(gmtYears.indexOf(year))) 
+  var properties = ['temp']
+  var image = ee.Image.constant(yearTemp.toDictionary(properties).values())
+  var renamed = image.rename(properties)
+  return renamed.set("system:time_start", ee.Date.fromYMD(year, 1, 1).millis())
+  return renamed
+})) ;
+
+var innerJoin = ee.Join.inner();
+
+var filter = ee.Filter.equals({
+  leftField: 'system:time_start',
+  rightField: 'system:time_start'
+});
+
+var innerJoinData = innerJoin.apply(annualClim, gmtImages, filter);
+
+var datasets =  ee.ImageCollection(innerJoinData.map(function(img){
+  return ee.Image.cat(img.get('primary'), img.get('secondary'))
+  .copyProperties(img,img.propertyNames())
+}));
+
+var datasets = datasets.map(function(img) {
+  
+  // Compute time in fractional years since the epoch.
+  var date = img.date();
+  var years = date.difference(ee.Date('1900-01-01'), 'year');
+  
+  return img
+  // Add a time band.
+  .addBands(ee.Image(years).rename('t')).float()
+  // Add a constant band.
+  .addBands(ee.Image.constant(1))
+}) ;
+
+/// compute trend -- regress AC on GMT
+
+var climChgTrend = datasets
+  .select(ee.List(['constant','temp']).add('precipitation_sum'))
+  .reduce(ee.Reducer.linearRegression({
+   numX: 2,
+   numY: 1
+  })) ;
+
+// Turn the array image into a multi-band image of coefficients.
+var climChgTrendCoefs = climChgTrend.select('coefficients')
+  .arrayProject([0])
+  .arrayFlatten([ee.List(['constant','temp'])]);
+
+// Compute fitted values.
+var fittedTrend = datasets.map(function(image) {
+  return image.addBands(
+    image.select(ee.List(['constant','temp']))
+      .multiply(climChgTrendCoefs)
+      .reduce('sum')
+      .rename('fitted')) ;
+  }).map(function(image) {
+    return image.addBands(image.select('precipitation_sum') // residual
+      .subtract(image.select('fitted')).rename('residual'));
+  }) ;
+
+// compute r-squared
+
+// Compute the number of observations in each pixel.
+var n = datasets.select('precipitation_sum').count();
+
+// There are n-p degrees of freedom
+var dof = n.subtract(2);
+
+// Get the root mean square residuals in a pixel.
+var rmsr = climChgTrend.select('residuals')
+    .arrayProject([0])
+    .arrayFlatten([['rmsr']]);
+
+// Residual sum of squares.
+var rss = rmsr.pow(2).multiply(n);
+
+// Estimated variance = RSS/(n-p).
+var sSquared = rss.divide(dof);
+
+// Sample variance of the dependent variable.
+var yVariance = datasets.select('precipitation_sum')
+    .reduce(ee.Reducer.sampleVariance());
+
+// Adjusted, squared, multiple regression coefficient.
+var rSquareAdj = ee.Image(1).subtract(sSquared.divide(yVariance));
+
+/// compute decadal variability -- smoothed moving average
+
+// Moving-Window Smoothing
+
+// Specify the time-window
+var days = 365*1.5;
+
+// Convert to milliseconds 
+var millis = ee.Number(days).multiply(1000*60*60*24);
+
+// We use a 'save-all join' to find all images 
+// that are within the time-window
+
+// The join will add all matching images into a
+// new property called 'images'
+var join = ee.Join.saveAll({
+  matchesKey: 'images'
+});
+
+// This filter will match all images that are captured
+// within the specified day of the source image
+var diffFilter = ee.Filter.maxDifference({
+  difference: millis,
+  leftField: 'system:time_start', 
+  rightField: 'system:time_start'
+});
+
+
+var joinedCollection = join.apply({
+  primary: fittedTrend, 
+  secondary: fittedTrend, 
+  condition: diffFilter
+});
+
+// Each image in the joined collection will contain
+// matching images in the 'images' property
+// Extract and return the mean of matched images
+var extractAndComputeMean = function(image) {
+  var matchingImages = ee.ImageCollection.fromImages(image.get('images'));
+  var meanImage = matchingImages.reduce(
+    ee.Reducer.mean().setOutputs(['moving_average']))
+  return ee.Image(image).addBands(meanImage)
+}
+
+var smoothedCollection = ee.ImageCollection(
+  joinedCollection.map(extractAndComputeMean));
+
+/// compute interannual variability -- residual of the above
+
+var smoothedCollection = smoothedCollection.map(function(image) {
+  return image.addBands(image.select('residual')
+  .subtract(image.select('residual_moving_average'))
+  .rename('interannual')) ;
+}) ;
+
+// compute r-squared of decadal
+
+// There are n-p degrees of freedom
+var dofDecadal = n.subtract(1);
+
+// Residual sum of squares.
+var rssDecadal = smoothedCollection.map(function(image) {
+  return image.addBands(
+    image.select('interannual').pow(2).rename('resid_sq')
+    ) ;
+})
+  .reduce(ee.Reducer.sum()).select('resid_sq_sum') ;
+
+// Estimated variance = RSS/(n-p).
+var sSquaredDecadal = rssDecadal.divide(dofDecadal);
+
+// Sample variance of the dependent variable.
+var yVarianceDecadal = smoothedCollection.select('residual')
+    .reduce(ee.Reducer.sampleVariance());
+
+// Adjusted, squared, multiple regression coefficient.
+var rSquareAdjDecadal = ee.Image(1).subtract(sSquaredDecadal.divide(yVarianceDecadal));
+
+/// plot
+
+var trendChart = ui.Chart.image.series({
+  imageCollection: fittedTrend.select(['fitted','precipitation_sum']),
+  region: region,
+  reducer: ee.Reducer.mean(),
+  scale: 10000,
+  xProperty: 'system:time_start'
+}).setSeriesNames(['Trend', 'Observations'])
+  .setOptions({
+      title: 'Long-Term Trend',
+      interpolateNulls: false,
+      vAxis: {title: 'Seasonal rainfall Aug-Feb'},
+      hAxis: {title: '', format: 'YYYY'},
+      lineWidth: 1,
+      pointSize: 4,
+      series: {
+        1: {color: '#66c2a4', lineDashStyle: [1, 1], pointSize: 2}, 
+        0: {color: '#238b45', lineWidth: 2 },
+      },
+
+    })  ;
+
+print(trendChart)
+
+var decadalChart = ui.Chart.image.series({
+  imageCollection: smoothedCollection.select(['residual_moving_average','residual']),
+  region: region,
+  reducer: ee.Reducer.mean(),
+  scale: 10000,
+  xProperty: 'system:time_start'
+}).setSeriesNames(['Residual', 'Decadal'])
+  .setOptions({
+      title: 'Decadal Variability',
+      interpolateNulls: false,
+      vAxis: {title: 'Seasonal rainfall Aug-Feb (diff. from avg.)'},
+      hAxis: {title: '', format: 'YYYY'},
+      lineWidth: 1,
+      pointSize: 4,
+      series: {
+        0: {color: '#66c2a4', lineDashStyle: [1, 1], pointSize: 2}, 
+        1: {color: '#238b45', lineWidth: 2 },
+      },
+
+    }) ;
+
+print(decadalChart)
+
+var interannualChart = ui.Chart.image.series({
+  imageCollection: smoothedCollection.select(['interannual']),
+  region: region,
+  reducer: ee.Reducer.mean(),
+  scale: 10000,
+  xProperty: 'system:time_start'
+}).setSeriesNames(['Interannual'])
+  .setOptions({
+      title: 'Interannual Variability',
+      interpolateNulls: false,
+      vAxis: {title: 'Seasonal rainfall Aug-Feb (diff. from avg.)'},
+      hAxis: {title: '', format: 'YYYY'},
+      lineWidth: 1,
+      pointSize: 4,
+      series: {
+        0: {color: '#238b45', lineWidth: 2 }, 
+      },
+
+    }) ;
+
+print(interannualChart)
+
+/// map
+
+var visCompiled = ee.Image([rSquareAdj,rSquareAdjDecadal])
+  .rename(['trend','decadal']);
+
+var visCompiled = visCompiled.addBands(ee.Image(1)
+  .subtract(visCompiled.select('trend'))
+  .subtract(visCompiled.select('decadal'))
+  .rename('interannual')) ;
+  
+var visParams = {
+  bands: ['trend','decadal','interannual'],
+  min: [0,0,0],
+  max: [1,1,1],
+  gamma: [1,1,1]
+} ;
+
+Map.addLayer(ee.Image(0),{palette:['000000']}) ;
+
+Map.addLayer(visCompiled.clip(region),visParams,'Rainfall variability dynamics',true) ;
+
+Map.centerObject(region, 8) ;
+
+var countries = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level0") ;
+
+var empty = ee.Image().byte();
+var outline = empty.paint({
+  featureCollection: countries,
+  color: 1,
+  width: 2
+});
+
+// compute mean absolute deviance of seasonal total rain - just curious about this
+
+var climMean = annualClim.reduce(ee.Reducer.mean())
+var climSd = annualClim.reduce(ee.Reducer.stdDev())
+
+var climMeanDev = climSd.divide(climMean)
+
+var climMeanDevPal = {
+  min: 0.0,
+  max: 0.5,
+  palette: ['0300ff', '418504', 'efff07', 'ff0303', 'ff0303'],
+};
+
+Map.addLayer(climMeanDev.clip(region),climMeanDevPal,'Mean absolute deviation',false) ;
+
+
+Map.addLayer(outline, {palette: 'DE00FF'}, 'Countries');
+
+
+var muni = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level2").filter(ee.Filter.eq("ADM0_NAME","Belize")) ;
+
+var empty = ee.Image().byte();
+  var outline = empty.paint({
+    featureCollection: muni, 
+    color: 1,
+    width: 1
+  });
+  Map.addLayer(outline, {palette: 'ffffff'}, 'Admin areas') ;

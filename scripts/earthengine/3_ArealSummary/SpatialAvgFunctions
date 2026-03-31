@@ -1,0 +1,173 @@
+
+// subset climate data to defined admin areas
+  // This is useful for making maps - improves visual clarity and speeds up rendering.
+  // Also useful for raster exports to save file size.
+  // However, it is not necessary for e.g. making tables, since GEE doesn't hold entire raster datasets in memory.
+
+var clipToAdmin = function(processed_dataset,shapefile,subset_yn,unit_name,unit_list) {
+  
+  // processed_dataset: output from 1_HazardMetrics function
+  // shapefile: admin shapefile on cloud project or GEE Data Catalog
+  // subset_yn: boolean; subset by specific sub-units (TRUE) or use entire file (FALSE)?
+  // unit_name: string ; name of administrative level to subset by 
+  // unit_list: bracketed list of admin units to subset by ['example1','example2'...]
+  
+  if (subset_yn === true) {
+    
+    var unitList = ee.List(unit_list) ;
+    
+    shapefile = shapefile.filter(ee.Filter.inList(unit_name,unitList)) ;
+    
+  } 
+  
+  processed_dataset = processed_dataset.map(function(img) {
+    return img.clip(shapefile.geometry()) ;
+  }) ;
+  
+  return processed_dataset ; 
+  
+} ;
+
+
+// calculate areal average and standard deviation of climate data (historical series)
+
+var arealSummary = function(processed_dataset,shapefile,include_geometry) {
+
+  // processed_dataset: output from 1_HazardMetrics function
+  // shapefile: string; name of shapefile on cloud project 
+  // include_geometry: boolean; whether to include feature geometry in the export (TRUE) or only table values (FALSE)
+
+  var datasetScale = processed_dataset.first().projection().nominalScale() ;
+
+  var scaleToUse = datasetScale.max(ee.Number(1000)) ;
+
+  var arealStats = ee.Reducer.mean().combine({
+    reducer2: ee.Reducer.sum(),
+    sharedInputs: true
+  }) ;
+  
+  if (include_geometry === true) {
+  
+    var arealSummary = processed_dataset.map(function(image) {
+    return image.reduceRegions({
+      collection: shapefile,
+      reducer: arealStats,
+      scale: scaleToUse,
+    }).map(function (featureWithReduction) {
+      return featureWithReduction.copyProperties(image).set('year', image.get('year'))
+        .set('id',featureWithReduction.id());
+      });
+        }).flatten();
+  
+    return arealSummary ;
+
+  }
+  
+  if (include_geometry === false) {
+    
+    var arealSummaryNoGeom = processed_dataset.map(function(image) {
+    return image.reduceRegions({
+      collection: shapefile,
+      reducer: arealStats,
+      scale: scaleToUse,
+    }).map(function (featureWithReduction) {
+      return featureWithReduction.setGeometry(null).copyProperties(image).set('year', image.get('year'))
+        .set('id',featureWithReduction.id());
+      });
+        }).flatten();
+  
+    return arealSummaryNoGeom ;
+
+    }
+  
+} ;
+
+// calculate areal average and standard deviation of climate data (single image)
+
+var arealSummarySingleImg = function(image,shapefile,include_geometry) {
+
+  // image: output from 2_StatsFunctions function
+  // shapefile: string; name of shapefile on cloud project 
+  // include_geometry: boolean; whether to include feature geometry in the export (TRUE) or only table values (FALSE)
+
+  var datasetScale = image.projection().nominalScale() ;
+
+  var scaleToUse = datasetScale.min(ee.Number(500)) ;
+
+  var arealStats = ee.Reducer.mean().combine({
+    reducer2: ee.Reducer.sum(),
+    sharedInputs: true,
+  }) ;
+  
+  if (include_geometry === true) {
+  
+    var arealSummary = image.reduceRegions({
+      collection: shapefile,
+      reducer: arealStats,
+      scale: scaleToUse
+    }).map(function (featureWithReduction) {
+      return featureWithReduction.copyProperties(image)
+        .set('id',featureWithReduction.id());
+      }) ;
+  
+    return arealSummary ;
+
+  }
+  
+  if (include_geometry === false) {
+    
+    var arealSummaryNoGeom = image.reduceRegions({
+      collection: shapefile,
+      reducer: arealStats,
+      scale: scaleToUse
+    }).map(function (featureWithReduction) {
+      return featureWithReduction.setGeometry(null).copyProperties(image)
+        .set('id',featureWithReduction.id());
+      }) ;
+  
+    return arealSummaryNoGeom ;
+
+    }
+  
+} ;
+
+
+
+// draw a buffer around point coordinate data, and merge overlapping features
+
+var pointsBuffer = function(pointsFeature,bufferSize) {
+
+  // pointsFeature: featureCollection of points data
+  // bufferSize: integer; size of buffer in meters 
+
+  var bufferPoly = function(feature) {
+    return feature.buffer(bufferSize); 
+  };
+  
+  var buffers = pointsFeature.map(bufferPoly).union();
+
+  var buffsGeoDissolve =buffers.geometry().dissolve();
+  
+  var fc = ee.FeatureCollection([
+    ee.Feature(buffsGeoDissolve)
+  ]);
+  
+  var multiGeomExplodeList = fc.toList(fc.size()).map(function(feature) {
+    var geomList = ee.Feature(feature).geometry().geometries();
+    var featureList = geomList.map(function(geom) {
+      return ee.Feature(ee.Geometry(geom));
+    });
+    return featureList;
+  })
+  .flatten();
+  
+  var buffDissolveFC = ee.FeatureCollection(multiGeomExplodeList);
+
+  return buffDissolveFC ; 
+
+} ;
+
+exports.clipToAdmin = clipToAdmin ; 
+exports.arealSummary = arealSummary ; 
+exports.arealSummarySingleImg = arealSummarySingleImg ; 
+exports.pointsBuffer = pointsBuffer ;

@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../export/">
+        <link rel="prev" href="../publish/">
       
       
       
@@ -367,6 +367,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../publish/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Publishing and Embedding Apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -481,6 +508,36 @@
 <li>year_end: integer; last calendar year for calculation</li>
 </ul>
 <p>Computes the average rainfall, i.e. the climatology, and outputs an ImageCollection of long-term means and standard deviations over the defined time intervals.</p>
+<p>seasonalWetDays(dataset,threshold,seasonStartDoy,seasonLength,year_start,year_end)</p>
+<ul>
+<li>dataset: string; satellite to use ["CHIRPS","GPM"]</li>
+<li>threshold: integer; threshold of wet day in mm</li>
+<li>seasonStartDoy: integer; day of year which defines beginning of agricultural year  </li>
+<li>seasonLength: integer; number of days that the agricultural year lasts</li>
+<li>year_start: integer; first calendar year for calculation</li>
+<li>year_end: integer; last calendar year for calculation</li>
+</ul>
+<p>Computes the percentage of days in the season above a given rainy day threshold. </p>
+<p>drySpell(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end)</p>
+<ul>
+<li>dataset: string; satellite to use ["CHIRPS","GPM"]</li>
+<li>seasonStartDoy: integer; day of year which defines beginning of agricultural year  </li>
+<li>seasonLength: integer; number of days that the agricultural year lasts</li>
+<li>threshold: daily rainfall threshold for defining a "dry day" </li>
+<li>year_start: integer; first calendar year for calculation</li>
+<li>year_end: integer; last calendar year for calculation</li>
+</ul>
+<p>Computes two dry spell statistics: The length of the longest dry spell (i.e., consecutive days with rain below the threshold) and the start day of the longest dry spell, over the defined seasonal interval. </p>
+<p>rainySpell(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end)</p>
+<ul>
+<li>dataset: string; satellite to use ["CHIRPS","GPM"]</li>
+<li>seasonStartDoy: integer; day of year which defines beginning of agricultural year  </li>
+<li>seasonLength: integer; number of days that the agricultural year lasts</li>
+<li>threshold: daily rainfall threshold for defining a "rainy day" </li>
+<li>year_start: integer; first calendar year for calculation</li>
+<li>year_end: integer; last calendar year for calculation</li>
+</ul>
+<p>Computes two rainy spell statistics: The length of the longest rainy spell (i.e., consecutive days with rain above the threshold) and the start day of the longest rainy spell, over the defined seasonal interval. </p>
 <h2 id="temperature">Temperature</h2>
 <p>tempIntervalAvg(dataset,interval,increment,year_start,year_end)</p>
 <ul>
@@ -510,6 +567,16 @@
 <li>year_end: integer; last calendar year for calculation</li>
 </ul>
 <p>Computes the number of heat stress days, i.e. days exceeding some temperature threshold, over the defined interval, and outputs an ImageCollection. This is an alternative way of pre-processing heat data that some applications use.  </p>
+<p>hotSpell(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end)</p>
+<ul>
+<li>dataset: string; satellite to use ["ERA5", "GLDAS","ERA5_LAND"]</li>
+<li>seasonStartDoy: integer; day of year which defines beginning of agricultural year  </li>
+<li>seasonLength: integer; number of days that the agricultural year lasts</li>
+<li>threshold: daily temp threshold for defining a "hot day" </li>
+<li>year_start: integer; first calendar year for calculation</li>
+<li>year_end: integer; last calendar year for calculation</li>
+</ul>
+<p>Computes two heat wave statistics: The length of the longest heat wave(i.e., consecutive days with temperature above the threshold) and the start day of the longest heat wave, over the defined seasonal interval. </p>
 <h1 id="statistical-functions">Statistical Functions</h1>
 <h2 id="projections">Projections</h2>
 <p>climChangeProjection(baseline_year_start, baseline_year_end, projection_year_start, projection_year_end, target_month_start, target_month_end, indicator, scenario)</p>

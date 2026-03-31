@@ -16,6 +16,7 @@ nav:
 - 'metrics.md'
 - 'forecast.md'
 - 'export.md'
+- 'publish.md'
 - 'functionguide.md'
 
 plugins:

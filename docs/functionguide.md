@@ -73,6 +73,39 @@ climatology(dataset,interval,increment,year_start,year_end)
 
 Computes the average rainfall, i.e. the climatology, and outputs an ImageCollection of long-term means and standard deviations over the defined time intervals.
 
+seasonalWetDays(dataset,threshold,seasonStartDoy,seasonLength,year_start,year_end)
+  
+- dataset: string; satellite to use ["CHIRPS","GPM"]
+- threshold: integer; threshold of wet day in mm
+- seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+- seasonLength: integer; number of days that the agricultural year lasts
+- year_start: integer; first calendar year for calculation
+- year_end: integer; last calendar year for calculation
+
+Computes the percentage of days in the season above a given rainy day threshold. 
+
+drySpell(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end)
+  
+- dataset: string; satellite to use ["CHIRPS","GPM"]
+- seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+- seasonLength: integer; number of days that the agricultural year lasts
+- threshold: daily rainfall threshold for defining a "dry day" 
+- year_start: integer; first calendar year for calculation
+- year_end: integer; last calendar year for calculation
+
+Computes two dry spell statistics: The length of the longest dry spell (i.e., consecutive days with rain below the threshold) and the start day of the longest dry spell, over the defined seasonal interval. 
+
+rainySpell(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end)
+  
+- dataset: string; satellite to use ["CHIRPS","GPM"]
+- seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+- seasonLength: integer; number of days that the agricultural year lasts
+- threshold: daily rainfall threshold for defining a "rainy day" 
+- year_start: integer; first calendar year for calculation
+- year_end: integer; last calendar year for calculation
+
+Computes two rainy spell statistics: The length of the longest rainy spell (i.e., consecutive days with rain above the threshold) and the start day of the longest rainy spell, over the defined seasonal interval. 
+
 ## Temperature 
 
 tempIntervalAvg(dataset,interval,increment,year_start,year_end)
@@ -105,6 +138,17 @@ seasonalHeatDays(dataset,threshold,seasonStartDoy,seasonLength,year_start,year_e
 - year_end: integer; last calendar year for calculation
 
 Computes the number of heat stress days, i.e. days exceeding some temperature threshold, over the defined interval, and outputs an ImageCollection. This is an alternative way of pre-processing heat data that some applications use.  
+
+hotSpell(dataset,seasonStartDoy,seasonLength,threshold,year_start,year_end)
+  
+- dataset: string; satellite to use ["ERA5", "GLDAS","ERA5_LAND"]
+- seasonStartDoy: integer; day of year which defines beginning of agricultural year  
+- seasonLength: integer; number of days that the agricultural year lasts
+- threshold: daily temp threshold for defining a "hot day" 
+- year_start: integer; first calendar year for calculation
+- year_end: integer; last calendar year for calculation
+
+Computes two heat wave statistics: The length of the longest heat wave(i.e., consecutive days with temperature above the threshold) and the start day of the longest heat wave, over the defined seasonal interval. 
 
 # Statistical Functions
 
