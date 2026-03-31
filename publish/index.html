@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../shapes/">
+        <link rel="prev" href="../export/">
       
       
-        <link rel="next" href="../forecast/">
+        <link rel="next" href="../functionguide/">
       
       
         
@@ -23,7 +23,7 @@
     
     
       
-        <title>Changing Climate Hazard Metrics - Belize MHEWS Google Earth Engine Guide</title>
+        <title>Publishing and Embedding Apps - Belize MHEWS Google Earth Engine Guide</title>
       
     
     
@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#changing-climate-hazard-metrics" class="md-skip">
+        <a href="#publishing-and-embedding-apps" class="md-skip">
           Skip to content
         </a>
       
@@ -112,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Changing Climate Hazard Metrics
+              Publishing and Embedding Apps
             
           </span>
         </div>
@@ -288,19 +288,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../metrics/" class="md-nav__link">
         
   
   
@@ -316,7 +307,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -379,10 +369,19 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../publish/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -398,6 +397,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -446,74 +446,27 @@
 
 
 
-<h1 id="changing-climate-hazard-metrics">Changing Climate Hazard Metrics</h1>
-<p>Now we will show you how to change the climate hazard metrics used by the tool. For this example, we will change the hazard metric used for drought analysis from seasonal total rainfall to season onset.  </p>
-<p>Before:</p>
-<pre><code>function hazardChart() {
+<h1 id="publishing-and-embedding-apps">Publishing and Embedding Apps</h1>
+<p>If you wish to share your Earth Engine maps with the public, you can publish them to a public URL. To do so, click on the "Apps" icon on the top right of the code editor panel, and then select "New App". You will be prompted to give the app a name, a location (on your GEE repository) for the source code, and an optional logo. </p>
+<p>Once published, it will take a few minutes before the app is publically viewable. You can update the source code of an app at any time by click its name in the Apps panel, and choosing "Overwrite". Note that apps will NOT automatically reflect changes to your code repositories; you must manually publish each update. </p>
+<p>If you encouter errors in viewing an app even when the underlying script works, be sure that all assets that the script is using are accessable to the app. You can share assets with an app without having to make them publically downloadable. To do so, choose the "Add App Access" dropdown from the asset sharing tab. </p>
+<p>The code repository for this project comes with a number of scripts for interactive apps, including the historical hazard analysis maptools used for this workshop discussion, as well as forecast monitoring maptools for seasonal onset, rainy spells, heat waves, and seasonal drought. </p>
+<p>https://ee-maxmauerman.projects.earthengine.app/view/belizeexcessmonitor
+https://ee-maxmauerman.projects.earthengine.app/view/belizeheatmonitor
+https://ee-maxmauerman.projects.earthengine.app/view/belizemonitor
+https://ee-maxmauerman.projects.earthengine.app/view/belizeonsetmonitor</p>
+<h1 id="map-embed-example">Map Embed Example</h1>
+<p>You can embed Earth Engine apps in any .html webpage. This page contains a code example of how to do so, using html frames. </p>
+<p>Note that the forecast monitor apps are set up to take a "year", "month" and "day" as parameters in the URL. By changing these parameters, you can change the date for which the forecast is displayed. For example, if you wish to display the GFS weather forecast generated on March 15, 2026, you would add "#year=2026;month=3;day=15" to the end of the embed URL. Note that if forecast data does not exist for the specified time period, the app will fail to load. </p>
+<p>The result of the embedding code looks like the below:</p>
+<div style="text-align: center; margin-top: 10px;">
+    <iframe id="resizableFrame" 
+        src="https://ee-maxmauerman.projects.earthengine.app/view/belizeonsetmonitor#year=2026;month=3;day=15;" 
+        width="1200" height="1300" 
+        style="border:1px solid black; transition: all 0.3s ease;"></iframe>
+</div>
 
-    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
-
-    var startDate = ee.Date.fromYMD(year_start+1,1,1);
-    var endDate = ee.Date.fromYMD(year_end+1,1,1) ;
-    var secondDate = startDate.advance(1, 'year').millis();
-    var increase = secondDate.subtract(startDate.millis());
-    var interval_list = ee.List.sequence(startDate.millis(), endDate.millis(), increase) ;
-
-   var chart = ui.Chart.image.seriesByRegion({
-      imageCollection: rainTot, 
-      regions: selectedMuni, 
-      reducer: ee.Reducer.mean(), 
-      scale: 10000,
-      xProperty: 'year',
-      seriesProperty: 'shapeName'
-    }).setOptions({
-      lineWidth: 0,
-      pointSize: 5,
-      title: 'Total JJA rainfall',
-      vAxis: {title: 'total mm'},
-      hAxis: {title: 'Year'}
-    }) ;
-
-    return chart ;
-
-  }
-
-</code></pre>
-<p>After:</p>
-<pre><code>function hazardChart() {
-
-    var selectedMuni = muni.filterBounds(ee.Geometry.MultiPoint(selectedPoints)) ;
-
-    var startDate = ee.Date.fromYMD(year_start+1,1,1);
-    var endDate = ee.Date.fromYMD(year_end+1,1,1) ;
-    var secondDate = startDate.advance(1, 'year').millis();
-    var increase = secondDate.subtract(startDate.millis());
-    var interval_list = ee.List.sequence(startDate.millis(), endDate.millis(), increase) ;
-
-   var chart = ui.Chart.image.seriesByRegion({
-      imageCollection: seasonAOnset, // replace with the name of another hazard ImageCollection computed in the first part of the script 
-      regions: selectedMuni, 
-      reducer: ee.Reducer.mean(), 
-      scale: 10000,
-      xProperty: 'year',
-      seriesProperty: 'shapeName'
-    }).setOptions({
-      lineWidth: 0,
-      pointSize: 5,
-      title: 'Season onset', // also change title...
-      vAxis: {title: 'day of year}, // and axis label 
-      hAxis: {title: 'Year'}
-    }) ;
-
-    return chart ;
-
-  }
-
-</code></pre>
-<p>Keep in mind that this only changes the data displayed by the hazard plot in the tool, and NOT the forecast data, or any other accompanying information!</p>
-<h1 id="function-bank">Function Bank</h1>
-<p>We have implemented a large number of ready-made functions for computing common climate hazard metrics. You can find a detailed guide to these functions in the final section of this document. </p>
-<div id="slide-config" data-type="simple" data-next="../forecast/" data-kobo-id="hACTMCaZ" data-width="100%"> </div>
+<div id="slide-config" data-type="simple" data-next="../functionguide/" data-kobo-id="hACTMCaZ" data-width="100%"> </div>
 
 
 
